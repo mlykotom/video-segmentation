@@ -3,9 +3,8 @@ from time import gmtime, strftime
 from keras.callbacks import ModelCheckpoint
 
 from callbacks import *
-from generator import data_generator
-from generator import cityscapes_labels
 from model import segnet
+import cityscapes_labels, data_generator
 
 run_started = 'gta_segnet_' + strftime("%Y-%m-%d-%H:%M", gmtime())
 

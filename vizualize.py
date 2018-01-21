@@ -3,7 +3,7 @@ import random
 
 import cv2
 import numpy as np
-from generator import data_generator
+from gta_segnet import data_generator
 from model import segnet
 
 # target_height, target_width = 360, 480
