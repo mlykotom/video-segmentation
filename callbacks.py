@@ -21,7 +21,7 @@ def lr_scheduler(epochs, lr_base, lr_power):
         if mode is 'power_decay':
             # original lr scheduler
             lr = lr_base * ((1 - float(epoch) / epochs) ** lr_power)
-        if mode is 'exp_decay':
+        elif mode is 'exp_decay':
             # exponential decay
             lr = (float(lr_base) ** float(lr_power)) ** float(epoch + 1)
             # adam default lr
@@ -38,8 +38,10 @@ def lr_scheduler(epochs, lr_base, lr_power):
                     lr = 0.01
                 else:
                     lr = 0.1
+        else:
+            raise NotImplemented('lr_scheduler mode must be one of [power_decay, exp_decay]')
 
-            print('lr: %f' % lr)
+        print('lr: %f' % lr)
         return lr
 
     return LearningRateScheduler(lr_scheduler)

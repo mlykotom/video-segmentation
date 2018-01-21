@@ -2,13 +2,13 @@ from time import gmtime, strftime
 
 from keras.callbacks import ModelCheckpoint
 
+import cityscapes_labels
+import data_generator
 from callbacks import *
 from model import segnet
-import cityscapes_labels, data_generator
 
-run_started = 'gta_segnet_' + strftime("%Y-%m-%d-%H:%M", gmtime())
 
-if __name__ == '__main__':
+def train(images_path, labels_path, run_name):
     # target_height, target_width = 239, 253
     # target_height, target_width = 360, 480
     target_height, target_width = 360, 648
@@ -19,11 +19,6 @@ if __name__ == '__main__':
     batch_size = 2
     epochs = 100
 
-    dataset_path = '/home/xmlyna06/data/gta/'
-
-    images_path = os.path.join(dataset_path, 'images/')
-    labels_path = os.path.join(dataset_path, 'labels/')
-
     model = segnet.get_model(target_height, target_width, n_classes)
     model.summary()
 
@@ -33,8 +28,6 @@ if __name__ == '__main__':
         metrics=["categorical_accuracy"]
     )
 
-    print(model.summary())
-
     used_callbacks = []
 
     # ------------- lr scheduler
@@ -43,12 +36,11 @@ if __name__ == '__main__':
     used_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
 
     # ------------- tensorboard
-    tb = tensorboard('../logs', run_started, histogram_freq=0)
+    tb = tensorboard('../logs', run_name, histogram_freq=0)
     used_callbacks.append(tb)
 
     # ------------- model checkpoint
-    run_started = ''
-    filepath = "weights/weights_" + run_started + "_{epoch:02d}-{categorical_accuracy:.2f}.hdf5"
+    filepath = "weights/" + run_name + "_{epoch:02d}-{categorical_accuracy:.2f}.hdf5"
     checkpoint = ModelCheckpoint(
         filepath,
         monitor='categorical_accuracy',
@@ -67,6 +59,7 @@ if __name__ == '__main__':
         debug_samples=20
     )
 
+    # ------------- fit!
     model.fit_generator(
         generator=datagen.training_flow(labels, batch_size, (target_height, target_width)),
         steps_per_epoch=datagen.steps_per_epoch(batch_size),
@@ -77,4 +70,20 @@ if __name__ == '__main__':
         callbacks=used_callbacks
     )
 
-    model.save_weights('test_gta_weights.h5')
+    # save final model
+    model.save_weights('weights/' + run_name + '_' + str(epochs) + '_finished.h5')
+
+
+if __name__ == '__main__':
+    run_started = 'gta_segnet_' + strftime("%Y_%m_%d_%H:%M", gmtime()) + '_'
+
+    try:
+        # tries to get dataset path from os environments
+        dataset_path = os.environ['DATASETS']
+    except:
+        dataset_path = '/home/xmlyna06/data/gta/'
+
+    images_path = os.path.join(dataset_path, 'images/')
+    labels_path = os.path.join(dataset_path, 'labels/')
+
+    train(images_path, labels_path, run_started)
