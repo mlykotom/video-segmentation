@@ -5,7 +5,8 @@ import os
 import cv2
 import numpy as np
 
-import cityscapes_labels, utils
+import cityscapes_labels
+import utils
 
 
 class SimpleSegmentationGenerator:
@@ -53,6 +54,8 @@ class SimpleSegmentationGenerator:
         assert path[-1] == '/'
 
         files = glob.glob(path + "*.jpg") + glob.glob(path + "*.png") + glob.glob(path + "*.jpeg")
+        assert len(files) > 0, 'No files in %s folder!' % path
+
         files.sort()
         return files
 
