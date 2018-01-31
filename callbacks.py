@@ -27,17 +27,16 @@ def lr_scheduler(epochs, lr_base, lr_power):
             # adam default lr
             if mode is 'adam':
                 lr = 0.001
-
-            if mode is 'progressive_drops':
-                # drops as progression proceeds, good for sgd
-                if epoch > 0.9 * epochs:
-                    lr = 0.0001
-                elif epoch > 0.75 * epochs:
-                    lr = 0.001
-                elif epoch > 0.5 * epochs:
-                    lr = 0.01
-                else:
-                    lr = 0.1
+        elif mode is 'progressive_drops':
+            # drops as progression proceeds, good for sgd
+            if epoch > 0.9 * epochs:
+                lr = 0.0001
+            elif epoch > 0.75 * epochs:
+                lr = 0.001
+            elif epoch > 0.5 * epochs:
+                lr = 0.01
+            else:
+                lr = 0.1
         else:
             raise NotImplemented('lr_scheduler mode must be one of [power_decay, exp_decay]')
 

@@ -179,8 +179,7 @@ if __name__ == '__main__':
         class_scores = class_scores.reshape((target_size[0], target_size[1], n_classes))
         class_image = np.argmax(class_scores, axis=2)
 
-        colored_class_image = utils.class_image_to_image(class_image,
-                                                         cityscapes_labels.trainid2label)
+        colored_class_image = utils.class_image_to_image(class_image, cityscapes_labels.trainId2label)
         colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
         cv2.imshow("gt", colored_class_image)
         cv2.waitKey()
