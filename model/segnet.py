@@ -61,7 +61,7 @@ def get_model(input_height, input_width, n_classes):
     return model
 
 
-# if __name__ == '__main__':
-#     # test
-#     m = get_model(360, 480, 12)
-#     m.summary()
+if __name__ == '__main__':
+    # test
+    m = get_model(352, 480, 12)
+    m.summary()

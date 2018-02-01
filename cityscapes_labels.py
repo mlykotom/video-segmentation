@@ -56,7 +56,7 @@ Label = namedtuple('Label', [
 # Make sure to provide your results using the original IDs and not the training IDs.
 # Note that many IDs are ignored in evaluation and thus you never need to predict these!
 labels = [
-    #       name   id    trainId   category catId   hasInstances   ignoreInEval   color
+    #       name                    id  trainId   category catId   hasInstances   ignoreInEval   color
     Label('unlabeled',              0, 0, 'void', 0, False, True, (0, 0, 0)),
     Label('road',                   7, 1, 'flat', 1, False, False, (128, 64, 128)),
     Label('sidewalk',               8, 2, 'flat', 1, False, False, (244, 35, 232)),
