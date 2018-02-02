@@ -1,6 +1,7 @@
 import glob
 import itertools
 import os
+import skimage.morphology as skm
 
 import cv2
 import numpy as np
@@ -44,10 +45,13 @@ class SimpleSegmentationGenerator:
 
         split_index = int((1.0 - validation_split) * len(images))
 
-        self._training_data = zip(images[:split_index], labels[:split_index])
-        self._validation_data = zip(images[split_index:], labels[split_index:])
+        training_img, training_lab = images[:split_index], labels[:split_index]
+        validation_img, validation_lab = images[split_index:], labels[split_index:]
 
-        print("training samples %d, validating samples %d" % (len(self._training_data), len(self._validation_data)))
+        self._training_data = zip(training_img, training_lab)
+        self._validation_data = zip(validation_img, validation_lab)
+
+        print("training samples %d, validating samples %d" % (len(training_lab), len(validation_lab)))
 
     @staticmethod
     def _get_files_from_path(path):
@@ -103,18 +107,21 @@ class SimpleSegmentationGenerator:
     def one_hot_encoding(label_img, labels, height, width):
         label_img = cv2.cvtColor(label_img, cv2.COLOR_BGR2RGB)
         label_img = cv2.resize(label_img, (width, height))
-        n_classes = len(labels)
-        seg_labels = np.zeros((height, width, n_classes))
 
+        label_list = []
         for lab in labels:
-            seg_labels[:, :, lab.trainId][np.where((label_img == lab.color).all(axis=2))] = 1
+            label_current = np.all(label_img == lab.color, axis=2).astype('uint8')
 
-            # working
-            # class_label = np.zeros((height, width, 1), dtype='uint8')
-            # class_label[np.where((label_img == lab.color).all(axis=2))] = 255
-            # seg_labels[:, :, lab.trainId] = class_label[:, :, 0]
+            # getting boundaries!
+            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+            # label_current = cv2.morphologyEx(label_current, cv2.MORPH_GRADIENT, kernel)
 
-        seg_labels = np.reshape(seg_labels, (width * height, n_classes))
+            # TODO resize here? because if resizing first, it gets bad boundaries or tiny objects
+            # label_current = cv2.resize(label_current, (width, height))
+
+            label_list.append(label_current)
+
+        seg_labels = np.rollaxis(np.array(label_list), 0, 3)
         return seg_labels
 
     def _flow(self, data, labels, batch_size, target_size):
@@ -152,7 +159,7 @@ class SimpleSegmentationGenerator:
 
 
 if __name__ == '__main__':
-    dataset_path = '/home/xmlyna06/data/gta/'
+    dataset_path = os.path.join(utils.get_data_path(), 'gta')
 
     images_path = os.path.join(dataset_path, 'images/')
     labels_path = os.path.join(dataset_path, 'labels/')
@@ -166,12 +173,19 @@ if __name__ == '__main__':
 
     batch_size = 1
     target_size = (360, 648)
+    # target_size = (1052, 1914)
     # target_size = (10, 10)
     labels = cityscapes_labels.labels
     n_classes = len(labels)
 
+    i = 3
     for img, label in datagen.training_flow(labels, batch_size, target_size):
-        print(img.shape, label.shape)
+        print(i, img.shape, label.shape)
+
+        lol = labels_path + str(i).zfill(5) + '.png'
+        print(lol)
+        real_gt = cv2.imread(lol)
+        real_gt = cv2.resize(real_gt, (target_size[1], target_size[0]))
 
         cv2.imshow("normalized", img[0])
 
@@ -182,4 +196,9 @@ if __name__ == '__main__':
         colored_class_image = utils.class_image_to_image(class_image, cityscapes_labels.trainId2label)
         colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
         cv2.imshow("gt", colored_class_image)
+
+        cv2.imshow("real_gt", real_gt)
+
         cv2.waitKey()
+
+        i += 1

@@ -1,9 +1,22 @@
 from __future__ import print_function
 
 import colorsys
+import os
 
 import numpy as np
 from keras.models import Model
+
+
+def get_data_path():
+    home_user = os.environ['USER']
+    if home_user == 'mlyko':
+        data_path = '/storage/brno7-cerit/home/mlyko/data/'
+    elif home_user == 'xmlyna06':
+        data_path = '/home/xmlyna06/data/'
+    else:
+        raise Exception("Unknown dataset path!")
+
+    return data_path
 
 
 def class_image_to_image(class_id_image, class_id_to_rgb_map):
