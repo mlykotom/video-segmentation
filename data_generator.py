@@ -1,22 +1,64 @@
 import glob
 import itertools
 import os
-import skimage.morphology as skm
 
 import cv2
 import numpy as np
 
 import cityscapes_labels
+import config
 import utils
 
 
 class SimpleSegmentationGenerator:
 
-    def __init__(self, images_path, labels_path, validation_split=0.0, debug_samples=0):
+    def __init__(self, images_path, labels_path, validation_split=0.0, debug_samples=0, shuffle=False):
 
         # validation split cant be full dataset and can't be out of range
         assert 0.0 <= validation_split < 1.0
 
+        train_split = self.get_filenames('train')
+        self._training_data = []
+        for img_id in train_split:
+            img_path = os.path.join(images_path, img_id)
+            lab_path = os.path.join(labels_path, img_id)
+            self._training_data.append((img_path, lab_path))
+
+        validation_split = self.get_filenames('val')
+        self._validation_data = []
+        for img_id in validation_split:
+            img_path = os.path.join(images_path, img_id)
+            lab_path = os.path.join(labels_path, img_id)
+            self._validation_data.append((img_path, lab_path))
+
+        # TODO test split
+
+        # sample for debugging
+        if debug_samples > 0:
+            self._training_data = self._training_data[:debug_samples]
+            self._validation_data = self._validation_data[:debug_samples]
+
+        print("training samples %d, validating samples %d" % (len(self._training_data), len(self._validation_data)))
+
+        # if shuffle:
+        #     c = list(zip(images, labels))
+        #     random.shuffle(c)
+        #     images, labels = zip(*c)
+
+        # same amount of files
+        # assert len(images) == len(labels)
+
+        # split_index = int((1.0 - validation_split) * len(images))
+        #
+        # training_img, training_lab = images[:split_index], labels[:split_index]
+        # validation_img, validation_lab = images[split_index:], labels[split_index:]
+
+        # self._training_data = zip(training_img, training_lab)
+        # self._validation_data = zip(validation_img, validation_lab)
+        # self._test_data = # TODO
+
+    @DeprecationWarning
+    def get_files_from_paths(self, images_path, labels_path):
         # get images files
         if not isinstance(images_path, list):
             images_path = [images_path]
@@ -35,29 +77,47 @@ class SimpleSegmentationGenerator:
             files = self._get_files_from_path(path)
             labels += files
 
-        # sample for debugging
-        if debug_samples > 0:
-            images = images[:debug_samples]
-            labels = labels[:debug_samples]
+    @staticmethod
+    def _filter_files(all_files, to_remove):
+        def filter_not_wanted(fn):
+            for id in to_remove:
+                if os.path.basename(fn) == (str(id).zfill(5) + '.png'):
+                    return False
 
-        # same amount of files
-        assert len(images) == len(labels)
+            return True
 
-        split_index = int((1.0 - validation_split) * len(images))
+        return filter(filter_not_wanted, all_files)
 
-        training_img, training_lab = images[:split_index], labels[:split_index]
-        validation_img, validation_lab = images[split_index:], labels[split_index:]
+    @staticmethod
+    def get_filenames(which_set):
+        """Get file names for this set."""
 
-        self._training_data = zip(training_img, training_lab)
-        self._validation_data = zip(validation_img, validation_lab)
+        import scipy.io
 
-        print("training samples %d, validating samples %d" % (len(training_lab), len(validation_lab)))
+        filenames = []
+        split = scipy.io.loadmat(os.path.join('gta_read_mapping', 'split.mat'))
+        split = split[which_set + "Ids"]
+
+        # To remove (Files with different size in img and mask)
+        # TODO general (this is applied only to GTA)
+        to_remove = [1, 2] + [15188, ] + range(20803, 20835) + range(20858, 20861)
+
+        for id in split:
+            if id not in to_remove:
+                filenames.append(str(id[0]).zfill(5) + '.png')
+
+        print('GTA5: ' + which_set + ' ' + str(len(filenames)) + ' files')
+        return filenames
 
     @staticmethod
     def _get_files_from_path(path):
         assert path[-1] == '/'
 
-        files = glob.glob(path + "*.jpg") + glob.glob(path + "*.png") + glob.glob(path + "*.jpeg")
+        # TODO general (this is applied only to GTA)
+        to_remove = [1, 2] + [15188, ] + range(20803, 20835) + range(20858, 20861)
+        all_files = glob.glob(path + "*.jpg") + glob.glob(path + "*.png") + glob.glob(path + "*.jpeg")
+        files = SimpleSegmentationGenerator._filter_files(all_files, to_remove)
+
         assert len(files) > 0, 'No files in %s folder!' % path
 
         files.sort()
@@ -112,6 +172,8 @@ class SimpleSegmentationGenerator:
         for lab in labels:
             label_current = np.all(label_img == lab.color, axis=2).astype('uint8')
 
+            # TODO don't want black boundaries :(
+
             # getting boundaries!
             # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
             # label_current = cv2.morphologyEx(label_current, cv2.MORPH_GRADIENT, kernel)
@@ -121,7 +183,11 @@ class SimpleSegmentationGenerator:
 
             label_list.append(label_current)
 
-        seg_labels = np.rollaxis(np.array(label_list), 0, 3)
+        label_arr = np.array(label_list)
+
+        seg_labels = np.rollaxis(label_arr, 0, 3)
+        seg_labels = np.reshape(seg_labels, (label_img.shape[0] * label_img.shape[1], label_arr.shape[0]))
+
         return seg_labels
 
     def _flow(self, data, labels, batch_size, target_size):
@@ -157,9 +223,20 @@ class SimpleSegmentationGenerator:
     def validation_flow(self, labels, batch_size, target_size):
         return self._flow(self._validation_data, labels, batch_size, target_size)
 
+    def validation_data(self, labels, batch_size, target_size):
+        data = []
+        labs = []
+        for i in range(len(self._validation_data)):
+            img, lab = next(self.validation_flow(labels, batch_size, target_size))
+            for b in range(batch_size):
+                data.append(img[b])
+                labs.append(lab[b])
+
+        return np.array(data), np.array(labs)
+
 
 if __name__ == '__main__':
-    dataset_path = os.path.join(utils.get_data_path(), 'gta')
+    dataset_path = config.data_path('gta')
 
     images_path = os.path.join(dataset_path, 'images/')
     labels_path = os.path.join(dataset_path, 'labels/')
@@ -168,7 +245,8 @@ if __name__ == '__main__':
         images_path=images_path,
         labels_path=labels_path,
         validation_split=0.2,
-        debug_samples=20
+        # debug_samples=20
+        shuffle=True
     )
 
     batch_size = 1
@@ -182,10 +260,10 @@ if __name__ == '__main__':
     for img, label in datagen.training_flow(labels, batch_size, target_size):
         print(i, img.shape, label.shape)
 
-        lol = labels_path + str(i).zfill(5) + '.png'
-        print(lol)
-        real_gt = cv2.imread(lol)
-        real_gt = cv2.resize(real_gt, (target_size[1], target_size[0]))
+        # lol = labels_path + str(i).zfill(5) + '.png'
+        # print(lol)
+        # real_gt = cv2.imread(lol)
+        # real_gt = cv2.resize(real_gt, (target_size[1], target_size[0]))
 
         cv2.imshow("normalized", img[0])
 
@@ -197,7 +275,7 @@ if __name__ == '__main__':
         colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
         cv2.imshow("gt", colored_class_image)
 
-        cv2.imshow("real_gt", real_gt)
+        # cv2.imshow("real_gt", real_gt)
 
         cv2.waitKey()
 

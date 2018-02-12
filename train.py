@@ -1,78 +1,179 @@
+import argparse
+import atexit
 from time import gmtime, strftime
 
+import keras.models
 from keras import optimizers
 from keras.callbacks import ModelCheckpoint
-from keras.utils import plot_model
 
 import cityscapes_labels
+import config
 import data_generator
 from callbacks import *
 from loss import precision, dice_coef
-from model import segnet  # , fcn8, fcn32, mobile_unet
-import keras.models
+from models import *
 
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
 implemented_models = ['segnet', 'mobile_unet']
 
 
-def train(images_path, labels_path, model_name='segnet', run_name=''):
-    # target_height, target_width = 239, 253
-    # target_height, target_width = 360, 480
-    # target_height, target_width = 200, 224
-    target_height, target_width = 360, 648
-    # target_height, target_width = 352, 480
+class Trainer:
+    """
+    #TODO multi gpu training
+    """
 
+    @staticmethod
+    def from_impl(model_name, target_size, n_classes, is_debug=False):
+        """
+        :param str model_name: one of ['segnet', 'mobile_unet']
+        :param tuple target_size: (height, width)
+        :param int n_classes:
+        :return Trainer:
+        """
+
+        if model_name == 'segnet':
+            model = SegNet(target_size, n_classes, is_debug)
+        elif model_name == 'mobile_unet':
+            model = MobileUNet(target_size, n_classes, is_debug=is_debug)
+        else:
+            raise NotImplemented('Model must be one of [' + ','.join(implemented_models) + ']')
+
+        return Trainer(model, is_debug)
+
+    def __init__(self, model, is_debug=False):
+        """
+
+        :param BaseModel model:
+        """
+        self.model = model
+        self.is_debug = is_debug
+
+    def summaries(self):
+        self.model.summary()
+        self.model.plot_model()
+
+    def compile_model(self):
+        # if is_debug:
+        #     model.k.compile(
+        #         optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
+        #         loss=keras.losses.categorical_crossentropy,
+        #         metrics=[
+        #             dice_coef,
+        #             precision,
+        #             keras.metrics.categorical_accuracy
+        #         ],
+        #     )
+        # else:
+        self.model.k.compile(
+            loss=keras.losses.categorical_crossentropy,
+            optimizer=optimizers.Adam(lr=0.001),
+            metrics=[
+                dice_coef,
+                precision,
+                keras.metrics.categorical_accuracy
+            ]
+        )
+
+        return self.model
+
+    @staticmethod
+    def get_save_weights_name(model, epoch):
+        return model.name + '_save_epoch-%d.h5' % epoch
+
+    @staticmethod
+    def get_last_epoch(model):
+        """
+        :param BaseModel model:
+        :return tuple(int, str): last saved  epoch or 0
+        """
+
+        filename = SaveLastTrainedEpochCallback.get_model_file_name(model.name)
+        with open(filename, 'r') as fp:
+            try:
+                obj = json.load(fp)
+                epoch = obj['epoch']
+                weights = Trainer.get_save_weights_name(model, epoch)
+
+            except IOError as e:
+                print("File (%s) for loading last epoch not found" % filename)
+                epoch = 0
+                weights = None
+
+        return epoch, weights
+
+    @staticmethod
+    def termination_save(model):
+        """
+        Saves last epoch model
+        :param BaseModel model:
+        """
+        epoch, _ = Trainer.get_last_epoch(model)
+        model.k.save(Trainer.get_save_weights_name(model, epoch), overwrite=True)
+        print("===== saving model %s on epoch %d =====" % (model.name, epoch))
+
+    def fit_model(self, train_generator, train_steps, val_generator, val_steps, epochs=100,
+                  restart_training=False, callbacks=None):
+        """
+        """
+
+        if callbacks is None:
+            callbacks = []
+
+        # ------------- for restarting
+        save_epoch_callback = SaveLastTrainedEpochCallback(self.model.name)
+        callbacks.append(save_epoch_callback)
+        atexit.register(self.termination_save, self.model)
+
+        restart_epoch = 0
+        if restart_training:
+            # TODO if restarting, saving to the same run name as previous?
+            restart_epoch, weights_file = Trainer.get_last_epoch(self.model)
+
+            self.model.load_model(
+                weights_file,
+                custom_objects={
+                    'dice_coef': dice_coef,
+                    'precision': precision,
+                })
+
+        self.model.k.fit_generator(
+            generator=train_generator,
+            steps_per_epoch=train_steps,
+            epochs=epochs,
+            initial_epoch=restart_epoch,
+            verbose=1,
+            validation_data=val_generator,
+            validation_steps=val_steps,
+            callbacks=callbacks
+        )
+
+
+def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False):
+    # target_size = 360, 648
+    target_size = 384, 640
     labels = cityscapes_labels.labels
     n_classes = len(labels)
-
     batch_size = 2
     epochs = 200
 
-    if model_name == 'segnet':
-        model = segnet.get_model(target_height, target_width, n_classes)
-    # elif model_name == 'fcn8':
-    #     model = fcn8.get_model(target_height, target_width, n_classes)
-    # elif model_name == 'fcn32':
-    #     model = fcn32.get_model(target_height, target_width, n_classes)
-    # elif model_name == 'mobile_unet':
-    #     model = mobile_unet.get_model(target_height, target_width, n_classes)
-    else:
-        raise NotImplemented(
-            'Model must be one of [' + ','.join(implemented_models) + ']')
+    trainer = Trainer.from_impl(model_name, target_size, n_classes)
+    model = trainer.compile_model()
 
-    model.summary()
-    plot_model(
-        model,
-        to_file='model_' + model_name + '.png',
-        show_layer_names=True,
-        show_shapes=True
+    # ------------- data generator
+    datagen = data_generator.SimpleSegmentationGenerator(
+        images_path=images_path,
+        labels_path=labels_path,
+        validation_split=0.2,
+        debug_samples=20 if is_debug else 0
     )
 
-    model.compile(
-        loss="categorical_crossentropy",
-        optimizer=optimizers.Adam(lr=0.001),
-        metrics=[
-            dice_coef,
-            precision,
-            "categorical_accuracy"
-        ]
-    )
+    train_generator = datagen.training_flow(labels, batch_size, target_size)
+    train_steps = datagen.steps_per_epoch(batch_size)
+    val_generator = datagen.validation_flow(labels, batch_size, target_size)
+    val_steps = datagen.validation_steps(batch_size)
 
-    # model.compile(
-    #     optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
-    #     # optimizer=Adam(lr=0.001),
-    #     # optimizer=optimizers.RMSprop(),
-    #     loss=dice_coef_loss,
-    #     metrics=[
-    #         dice_coef,
-    #         recall,
-    #         precision,
-    #         'binary_crossentropy',
-    #     ],
-    # )
-
+    # ------------- callbacks
     used_callbacks = []
 
     # ------------- lr scheduler
@@ -81,12 +182,11 @@ def train(images_path, labels_path, model_name='segnet', run_name=''):
     used_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
 
     # ------------- tensorboard
-    tb = tensorboard('../logs', model_name + '_' + run_name, histogram_freq=0)
+    tb = tensorboard('../logs', model.name + '_' + run_name, histogram_freq=0)
     used_callbacks.append(tb)
 
     # ------------- model checkpoint
-    filepath = "weights/" + model_name + '_' + run_name + \
-        '.hdf5'  # + "_{epoch:02d}-{categorical_accuracy:.2f}.hdf5"
+    filepath = "weights/" + model.name + '_' + run_name + '_cat_acc-{categorical_accuracy:.2f}.hdf5'
     checkpoint = ModelCheckpoint(
         filepath,
         monitor='val_categorical_accuracy',
@@ -94,54 +194,46 @@ def train(images_path, labels_path, model_name='segnet', run_name=''):
         save_best_only=True,
         mode='max'
     )
-
     used_callbacks.append(checkpoint)
 
-    # ------------- data generator
-    datagen = data_generator.SimpleSegmentationGenerator(
-        images_path=images_path,
-        labels_path=labels_path,
-        validation_split=0.2,
-        # debug_samples=600
-    )
-
-    model = keras.models.load_model('weights/segnet_2018_01_29_08:09.hdf5', custom_objects={
-        'dice_coef': dice_coef,
-        'precision': precision,
-    })
-
-    # ------------- fit!
-    model.fit_generator(
-        generator=datagen.training_flow(
-            labels, batch_size, (target_height, target_width)),
-        steps_per_epoch=datagen.steps_per_epoch(batch_size),
-        epochs=epochs,
-        initial_epoch=16,
-        verbose=1,
-        validation_data=datagen.validation_flow(
-            labels, batch_size, (target_height, target_width)),
-        validation_steps=datagen.validation_steps(batch_size),
-        callbacks=used_callbacks
-    )
+    # train model
+    trainer.fit_model(train_generator, train_steps, val_generator, val_steps, epochs, restart_training, used_callbacks)
 
     # save final model
-    model.save_weights('weights/' + run_name + '_' +
-                       str(epochs) + '_finished.h5')
+    model.save_final(run_name, epochs)
 
 
 if __name__ == '__main__':
+    def parse_arguments():
+        parser = argparse.ArgumentParser(description='Train model in keras')
+        parser.add_argument('-r', '--restart',
+                            action='store_true',
+                            help='Restarts training from last saved epoch',
+                            default=False)
+
+        parser.add_argument('-d', '--debug',
+                            action='store_true',
+                            help='Just debug training (few images from dataset)',
+                            default=False)
+        args = parser.parse_args()
+        return args
+
+    args = parse_arguments()
     run_started = strftime("%Y_%m_%d_%H:%M", gmtime())
 
-    try:
-        # tries to get dataset path from os environments
-        dataset_path = os.environ['DATASETS']
-    except:
-        dataset_path = '/home/xmlyna06/data/'
-
-    dataset_path = dataset_path + 'gta/'
-
+    dataset_path = config.data_path('gta')
     images_path = os.path.join(dataset_path, 'images/')
     labels_path = os.path.join(dataset_path, 'labels/')
 
-    # 'mobile_unet
-    train(images_path, labels_path, 'segnet', run_started)
+    model_name = 'mobile_unet'
+
+    print("---------------")
+    print('dataset path', dataset_path)
+    print('model', model_name)
+    print("is debug", args.debug)
+    print("restart training", args.restart)
+    print("---------------")
+
+    train(images_path, labels_path, model_name, run_started,
+          is_debug=args.debug,
+          restart_training=args.restart)
