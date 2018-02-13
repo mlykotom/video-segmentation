@@ -33,9 +33,9 @@ class Trainer:
         """
 
         if model_name == 'segnet':
-            model = SegNet(target_size, n_classes, is_debug)
+            model = SegNet(target_size, n_classes, is_debug=is_debug)
         elif model_name == 'mobile_unet':
-            model = MobileUNet(target_size, n_classes, is_debug)
+            model = MobileUNet(target_size, n_classes, is_debug=is_debug)
         else:
             raise NotImplemented('Model must be one of [' + ','.join(implemented_models) + ']')
 
