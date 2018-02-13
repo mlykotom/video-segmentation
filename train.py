@@ -39,9 +39,12 @@ class Trainer:
         else:
             raise NotImplemented('Model must be one of [' + ','.join(implemented_models) + ']')
 
-        return Trainer(model, batch_size, is_debug, n_gpu)
+        if n_gpu > 1:
+            model.make_multi_gpu(n_gpu)
 
-    def __init__(self, model, batch_size, is_debug=False, n_gpu=1):
+        return Trainer(model, batch_size, n_gpu, is_debug)
+
+    def __init__(self, model, batch_size, n_gpu, is_debug=False):
         """
 
         :param BaseModel model:
@@ -79,9 +82,6 @@ class Trainer:
         #         ],
         #     )
         # else:
-
-        if self.n_gpu > 1:
-            self.model.make_multi_gpu(self.n_gpu)
 
         self.model.k.compile(
             loss=keras.losses.categorical_crossentropy,
