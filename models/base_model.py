@@ -1,7 +1,6 @@
 from abc import ABCMeta, abstractmethod
 
 import keras.utils
-from keras.utils import multi_gpu_model
 
 
 class BaseModel:
@@ -23,7 +22,7 @@ class BaseModel:
         self._model = self._create_model()
 
     def make_multi_gpu(self, n_gpu):
-        self._model = multi_gpu_model(self._model, n_gpu)
+        self._model = keras.utils.multi_gpu_model(self._model, n_gpu)
 
     def load_model(self, filepath, custom_objects=None, compile_model=True):
         """
@@ -36,7 +35,8 @@ class BaseModel:
         :return: self (for convenience)
         """
 
-        custom_objects = custom_objects.copy() or {}
+        custom_objects = custom_objects or {}
+        custom_objects = custom_objects.copy()
         custom_objects.update(self.custom_objects)
 
         self._model = keras.models.load_model(

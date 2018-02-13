@@ -5,8 +5,8 @@ from keras.applications.mobilenet import DepthwiseConv2D
 from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape
 from keras.models import Model
 
-from base_model import BaseModel
-from layers import BilinearUpSampling2D
+from models.base_model import BaseModel
+from models.layers import BilinearUpSampling2D
 
 
 class MobileUNet(BaseModel):

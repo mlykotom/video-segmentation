@@ -100,7 +100,7 @@ class SimpleSegmentationGenerator:
 
         # To remove (Files with different size in img and mask)
         # TODO general (this is applied only to GTA)
-        to_remove = [1, 2] + [15188, ] + range(20803, 20835) + range(20858, 20861)
+        to_remove = [1, 2] + [15188, ] + [i for i in range(20803, 20835)] + [i for i in range(20858, 20861)]
 
         for id in split:
             if id not in to_remove:
@@ -114,7 +114,8 @@ class SimpleSegmentationGenerator:
         assert path[-1] == '/'
 
         # TODO general (this is applied only to GTA)
-        to_remove = [1, 2] + [15188, ] + range(20803, 20835) + range(20858, 20861)
+        to_remove = [1, 2] + [15188, ] + [i for i in range(20803, 20835)] + [i for i in range(20858, 20861)]
+
         all_files = glob.glob(path + "*.jpg") + glob.glob(path + "*.png") + glob.glob(path + "*.jpeg")
         files = SimpleSegmentationGenerator._filter_files(all_files, to_remove)
 

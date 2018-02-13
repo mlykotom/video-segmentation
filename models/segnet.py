@@ -2,7 +2,7 @@ from keras import models
 from keras.engine import Layer
 from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape
 
-from base_model import BaseModel
+from models.base_model import BaseModel
 
 
 class SegNet(BaseModel):
