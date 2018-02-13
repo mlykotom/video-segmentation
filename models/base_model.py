@@ -1,10 +1,14 @@
 from abc import ABCMeta, abstractmethod
 
 import keras.utils
+from keras.utils import multi_gpu_model
 
 
 class BaseModel:
     __metaclass__ = ABCMeta
+
+    """dictionary of custom objects (as per keras definition)"""
+    custom_objects = {}
 
     def __init__(self, target_size, n_classes, is_debug=False):
         """
@@ -18,6 +22,9 @@ class BaseModel:
 
         self._model = self._create_model()
 
+    def make_multi_gpu(self, n_gpu):
+        self._model = multi_gpu_model(self._model, n_gpu)
+
     def load_model(self, filepath, custom_objects=None, compile_model=True):
         """
         Loads model from hdf5 file with layers and weights (complete model)
@@ -29,16 +36,12 @@ class BaseModel:
         :return: self (for convenience)
         """
 
-        if custom_objects is None:
-            custom_objects = {}
-
-        objs = {}
-        objs.update(self.custom_objects)
-        objs.update(custom_objects)
+        custom_objects = custom_objects.copy() or {}
+        custom_objects.update(self.custom_objects)
 
         self._model = keras.models.load_model(
             filepath=filepath,
-            custom_objects=objs,
+            custom_objects=custom_objects,
             compile=compile_model
         )
         return self
@@ -88,14 +91,6 @@ class BaseModel:
                 show_layer_names=True,
                 show_shapes=True
             )
-
-    @property
-    def custom_objects(self):
-        """
-        :rtype: dict
-        :return: dictionary of custom objects (as per keras definition)
-        """
-        return {}
 
     def save_final(self, run_name, last_epoch, to_file=None):
         """

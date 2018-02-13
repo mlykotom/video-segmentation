@@ -24,4 +24,8 @@ def last_checkpoint_saver(model_name):
 
 
 if __name__ == '__main__':
-    parse_checkpoint('SegNet')
+    # parse_checkpoint('SegNet')
+
+    fp = open('MobileUNet.last_epoch.json', 'w')
+    json.dump({"epoch": 0}, fp)
+    fp.close()

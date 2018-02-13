@@ -19,35 +19,49 @@ implemented_models = ['segnet', 'mobile_unet']
 
 
 class Trainer:
-    """
-    #TODO multi gpu training
-    """
+    train_callbacks = []
 
     @staticmethod
-    def from_impl(model_name, target_size, n_classes, is_debug=False):
+    def from_impl(model_name, target_size, n_classes, batch_size=1, is_debug=False, n_gpu=1):
         """
+        :param is_debug:
         :param str model_name: one of ['segnet', 'mobile_unet']
         :param tuple target_size: (height, width)
         :param int n_classes:
+        :param int n_gpu:
         :return Trainer:
         """
 
         if model_name == 'segnet':
             model = SegNet(target_size, n_classes, is_debug)
         elif model_name == 'mobile_unet':
-            model = MobileUNet(target_size, n_classes, is_debug=is_debug)
+            model = MobileUNet(target_size, n_classes, is_debug)
         else:
             raise NotImplemented('Model must be one of [' + ','.join(implemented_models) + ']')
 
-        return Trainer(model, is_debug)
+        return Trainer(model, batch_size, is_debug, n_gpu)
 
-    def __init__(self, model, is_debug=False):
+    def __init__(self, model, batch_size, is_debug=False, n_gpu=1):
         """
 
         :param BaseModel model:
         """
         self.model = model
         self.is_debug = is_debug
+
+        self.n_gpu = n_gpu
+        self.batch_size = batch_size * n_gpu
+        print("-- Number of GPUs used %d" % self.n_gpu)
+        print("-- Batch size (on all GPUs) %d" % self.batch_size)
+
+    @staticmethod
+    def get_gpus():
+        """
+        :rtype list:
+        :return: list of gpus available
+        """
+        from tensorflow.python.client import device_lib
+        return device_lib.list_local_devices()
 
     def summaries(self):
         self.model.summary()
@@ -65,6 +79,10 @@ class Trainer:
         #         ],
         #     )
         # else:
+
+        if self.n_gpu > 1:
+            self.model.make_multi_gpu(self.n_gpu)
+
         self.model.k.compile(
             loss=keras.losses.categorical_crossentropy,
             optimizer=optimizers.Adam(lr=0.001),
@@ -89,17 +107,22 @@ class Trainer:
         """
 
         filename = SaveLastTrainedEpochCallback.get_model_file_name(model.name)
-        with open(filename, 'r') as fp:
-            try:
+        print("-- Attempt to load saved info %s" % filename)
+        epoch = 0
+        weights = None
+
+        try:
+            with open(filename, 'r') as fp:
                 obj = json.load(fp)
                 epoch = obj['epoch']
                 weights = Trainer.get_save_weights_name(model, epoch)
 
-            except IOError as e:
-                print("File (%s) for loading last epoch not found" % filename)
-                epoch = 0
-                weights = None
+        except IOError:
+            print("Couldn't load %s file" % filename)
+        except ValueError:
+            print("Couldn't load last epoch (file=%s) JSON values" % filename)
 
+        print("-- Last epoch %d, weights file %s" % (epoch, weights is not None))
         return epoch, weights
 
     @staticmethod
@@ -109,47 +132,97 @@ class Trainer:
         :param BaseModel model:
         """
         epoch, _ = Trainer.get_last_epoch(model)
-        model.k.save(Trainer.get_save_weights_name(model, epoch), overwrite=True)
-        print("===== saving model %s on epoch %d =====" % (model.name, epoch))
+        if epoch > 0:
+            model.k.save(Trainer.get_save_weights_name(model, epoch), overwrite=True)
+            print("===== saving model %s on epoch %d =====" % (model.name, epoch))
+        else:
+            print("===== SKIPPING saving model because epoch % =====")
 
-    def fit_model(self, train_generator, train_steps, val_generator, val_steps, epochs=100,
-                  restart_training=False, callbacks=None):
+    def prepare_restarting(self, is_restart_set):
         """
+        :param is_restart_set:
+        :return:
         """
 
-        if callbacks is None:
-            callbacks = []
-
-        # ------------- for restarting
+        # add save epoch to json callback
         save_epoch_callback = SaveLastTrainedEpochCallback(self.model.name)
-        callbacks.append(save_epoch_callback)
+        self.train_callbacks.append(save_epoch_callback)
+
+        # register termination save
         atexit.register(self.termination_save, self.model)
 
         restart_epoch = 0
-        if restart_training:
+        if is_restart_set:
             # TODO if restarting, saving to the same run name as previous?
             restart_epoch, weights_file = Trainer.get_last_epoch(self.model)
 
-            self.model.load_model(
-                weights_file,
-                custom_objects={
-                    'dice_coef': dice_coef,
-                    'precision': precision,
-                })
+            if weights_file is not None:
+                self.model.load_model(
+                    weights_file,
+                    custom_objects={
+                        'dice_coef': dice_coef,
+                        'precision': precision,
+                    }
+                )
+
+        return restart_epoch
+
+    def prepare_callbacks(self, batch_size, epochs, run_name):
+        # ------------- lr scheduler
+        lr_base = 0.01 * (float(batch_size) / 16)
+        lr_power = 0.9
+        self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
+
+        # ------------- tensorboard
+        tb = tensorboard('../logs', self.model.name + '_' + run_name, histogram_freq=0)
+        self.train_callbacks.append(tb)
+
+        # ------------- model checkpoint
+        filepath = "weights/" + self.model.name + '_' + run_name + '_cat_acc-{categorical_accuracy:.2f}.hdf5'
+        checkpoint = ModelCheckpoint(
+            filepath,
+            monitor='val_categorical_accuracy',
+            verbose=1,
+            save_best_only=True,
+            mode='max'
+        )
+        self.train_callbacks.append(checkpoint)
+
+    def prepare_data(self, images_path, labels_path, labels, target_size):
+        # ------------- data generator
+        datagen = data_generator.SimpleSegmentationGenerator(
+            images_path=images_path,
+            labels_path=labels_path,
+            validation_split=0.2,
+            debug_samples=20 if self.is_debug else 0
+        )
+
+        # TODO find other way than this
+        self.train_generator = datagen.training_flow(labels, self.batch_size, target_size)
+        self.train_steps = datagen.steps_per_epoch(self.batch_size)
+        self.val_generator = datagen.validation_flow(labels, self.batch_size, target_size)
+        self.val_steps = datagen.validation_steps(self.batch_size)
+
+    def fit_model(self, run_name='', epochs=100, restart_training=False):
+
+        self.prepare_callbacks(self.batch_size, epochs, run_name)
+
+        restart_epoch = self.prepare_restarting(restart_training)
 
         self.model.k.fit_generator(
-            generator=train_generator,
-            steps_per_epoch=train_steps,
+            generator=self.train_generator,
+            steps_per_epoch=self.train_steps,
             epochs=epochs,
             initial_epoch=restart_epoch,
             verbose=1,
-            validation_data=val_generator,
-            validation_steps=val_steps,
-            callbacks=callbacks
+            validation_data=self.val_generator,
+            validation_steps=self.val_steps,
+            callbacks=self.train_callbacks
         )
 
 
-def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False):
+def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False,
+          n_gpu=1):
     # target_size = 360, 648
     target_size = 384, 640
     labels = cityscapes_labels.labels
@@ -157,47 +230,17 @@ def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_de
     batch_size = 2
     epochs = 200
 
-    trainer = Trainer.from_impl(model_name, target_size, n_classes)
+    trainer = Trainer.from_impl(model_name, target_size, n_classes, batch_size, is_debug, n_gpu)
     model = trainer.compile_model()
 
-    # ------------- data generator
-    datagen = data_generator.SimpleSegmentationGenerator(
-        images_path=images_path,
-        labels_path=labels_path,
-        validation_split=0.2,
-        debug_samples=20 if is_debug else 0
-    )
-
-    train_generator = datagen.training_flow(labels, batch_size, target_size)
-    train_steps = datagen.steps_per_epoch(batch_size)
-    val_generator = datagen.validation_flow(labels, batch_size, target_size)
-    val_steps = datagen.validation_steps(batch_size)
-
-    # ------------- callbacks
-    used_callbacks = []
-
-    # ------------- lr scheduler
-    lr_base = 0.01 * (float(batch_size) / 16)
-    lr_power = 0.9
-    used_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
-
-    # ------------- tensorboard
-    tb = tensorboard('../logs', model.name + '_' + run_name, histogram_freq=0)
-    used_callbacks.append(tb)
-
-    # ------------- model checkpoint
-    filepath = "weights/" + model.name + '_' + run_name + '_cat_acc-{categorical_accuracy:.2f}.hdf5'
-    checkpoint = ModelCheckpoint(
-        filepath,
-        monitor='val_categorical_accuracy',
-        verbose=1,
-        save_best_only=True,
-        mode='max'
-    )
-    used_callbacks.append(checkpoint)
+    trainer.prepare_data(images_path, labels_path, labels, target_size)
 
     # train model
-    trainer.fit_model(train_generator, train_steps, val_generator, val_steps, epochs, restart_training, used_callbacks)
+    trainer.fit_model(
+        run_name=run_name,
+        epochs=epochs,
+        restart_training=restart_training
+    )
 
     # save final model
     model.save_final(run_name, epochs)
@@ -215,8 +258,13 @@ if __name__ == '__main__':
                             action='store_true',
                             help='Just debug training (few images from dataset)',
                             default=False)
+
+        parser.add_argument('-g', '--gpus',
+                            help='Number of GPUs used for training',
+                            default=1)
         args = parser.parse_args()
         return args
+
 
     args = parse_arguments()
     run_started = strftime("%Y_%m_%d_%H:%M", gmtime())
@@ -232,8 +280,13 @@ if __name__ == '__main__':
     print('model', model_name)
     print("is debug", args.debug)
     print("restart training", args.restart)
+    print("GPUs number", args.gpus)
     print("---------------")
 
-    train(images_path, labels_path, model_name, run_started,
-          is_debug=args.debug,
-          restart_training=args.restart)
+    try:
+        train(images_path, labels_path, model_name, run_started,
+              is_debug=args.debug,
+              restart_training=args.restart,
+              n_gpu=int(args.gpus))
+    except KeyboardInterrupt:
+        print("Keyboard interrupted")

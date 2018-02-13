@@ -2,7 +2,7 @@ import keras.backend as K
 from keras import Input
 from keras.applications import mobilenet
 from keras.applications.mobilenet import DepthwiseConv2D
-from keras.layers import Conv2D, BatchNormalization, Activation, Dropout, concatenate, Conv2DTranspose, Reshape
+from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape
 from keras.models import Model
 
 from base_model import BaseModel
@@ -13,7 +13,6 @@ class MobileUNet(BaseModel):
 
     def __init__(self, target_size, n_classes, alpha=1.0, alpha_up=1.0, depth_multiplier=1, dropout=1e-3,
                  is_debug=False):
-
         self.alpha = alpha
         self.alpha_up = alpha_up
         self.depth_multiplier = depth_multiplier
@@ -212,9 +211,8 @@ class MobileUNet(BaseModel):
 
         return Model(img_input, x)
 
-    def custom_objects(self):
-        return {
-            'relu6': mobilenet.relu6,
-            'DepthwiseConv2D': mobilenet.DepthwiseConv2D,
-            'BilinearUpSampling2D': BilinearUpSampling2D,
-        }
+    custom_objects = {
+        'relu6': mobilenet.relu6,
+        'DepthwiseConv2D': mobilenet.DepthwiseConv2D,
+        'BilinearUpSampling2D': BilinearUpSampling2D,
+    }

@@ -102,17 +102,18 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
     def __init__(self, model_name):
         super(SaveLastTrainedEpochCallback, self).__init__()
         self.model_name = model_name
-        self.model_saver_fp = None
 
     @staticmethod
     def get_model_file_name(model_name):
         return model_name + '.last_epoch.json'
 
-    def on_train_begin(self, logs=None):
-        self.model_saver_fp = open(self.get_model_file_name(self.model_name), 'w')
-
     def on_epoch_end(self, epoch, logs=None):
-        json.dump({"epoch": epoch}, self.model_saver_fp)
-
-    def on_train_end(self, logs=None):
-        self.model_saver_fp.close()
+        """
+        Saves last successfully trained epoch
+        :param epoch:
+        :param logs:
+        :return:
+        """
+        with open(self.get_model_file_name(self.model_name), 'w') as fp:
+            # saves epoch + 1 (so that this is starting next time)
+            json.dump({"epoch": epoch + 1}, fp)
