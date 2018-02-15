@@ -15,6 +15,7 @@ from models import *
 
 implemented_models = ['segnet', 'mobile_unet']
 
+
 class Trainer:
     train_callbacks = []
 
@@ -208,10 +209,10 @@ class Trainer:
         )
 
         # TODO find other way than this
-        self.train_generator = datagen.training_flow(labels, self.batch_size, target_size)
-        self.train_steps = datagen.steps_per_epoch(self.batch_size)
-        self.val_generator = datagen.validation_flow(labels, self.batch_size, target_size)
-        self.val_steps = datagen.validation_steps(self.batch_size)
+        self.train_generator = datagen.flow('train', labels, self.batch_size, target_size)
+        self.train_steps = datagen.steps_per_epoch('train', self.batch_size)
+        self.val_generator = datagen.flow('val', labels, self.batch_size, target_size)
+        self.val_steps = datagen.steps_per_epoch('val', self.batch_size)
 
     def fit_model(self, run_name='', epochs=100, restart_training=False):
         restart_epoch, restart_run_name = self.prepare_restarting(restart_training, run_name)
@@ -236,6 +237,7 @@ def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_de
           batch_size=None, n_gpu=1):
     # target_size = 360, 648
     target_size = 384, 640
+    # TODO make smaller
     labels = cityscapes_labels.labels
 
     n_classes = len(labels)

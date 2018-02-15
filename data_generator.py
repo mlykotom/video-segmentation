@@ -17,28 +17,20 @@ class SimpleSegmentationGenerator:
         # validation split cant be full dataset and can't be out of range
         assert 0.0 <= validation_split < 1.0
 
-        train_split = self.get_filenames('train')
-        self._training_data = []
-        for img_id in train_split:
-            img_path = os.path.join(images_path, img_id)
-            lab_path = os.path.join(labels_path, img_id)
-            self._training_data.append((img_path, lab_path))
+        self._data = {'train': [], 'val': [], 'test': []}
 
-        validation_split = self.get_filenames('val')
-        self._validation_data = []
-        for img_id in validation_split:
-            img_path = os.path.join(images_path, img_id)
-            lab_path = os.path.join(labels_path, img_id)
-            self._validation_data.append((img_path, lab_path))
-
-        # TODO test split
+        self._fill_split('train')
+        self._fill_split('val')
+        self._fill_split('test')
 
         # sample for debugging
         if debug_samples > 0:
-            self._training_data = self._training_data[:debug_samples]
-            self._validation_data = self._validation_data[:debug_samples]
+            self._data['train'] = self._data['train'][:debug_samples]
+            self._data['val'] = self._data['val'][:debug_samples]
 
-        print("training samples %d, validating samples %d" % (len(self._training_data), len(self._validation_data)))
+        print("training samples %d, validating samples %d, test samples %d" %
+              (len(self._data['train']), len(self._data['val']), len(self._data['test']))
+              )
 
         # if shuffle:
         #     c = list(zip(images, labels))
@@ -56,6 +48,14 @@ class SimpleSegmentationGenerator:
         # self._training_data = zip(training_img, training_lab)
         # self._validation_data = zip(validation_img, validation_lab)
         # self._test_data = # TODO
+
+    def _fill_split(self, type):
+        split = self.get_filenames(type)
+
+        for img_id in split:
+            img_path = os.path.join(images_path, img_id)
+            lab_path = os.path.join(labels_path, img_id)
+            self._data[type].append((img_path, lab_path))
 
     @DeprecationWarning
     def get_files_from_paths(self, images_path, labels_path):
@@ -127,19 +127,17 @@ class SimpleSegmentationGenerator:
     def _steps_per_epoch(length, batch_size, gpu_count):
         return int(np.ceil(length / float(batch_size * gpu_count)))
 
-    def steps_per_epoch(self, batch_size, gpu_count=1):
+    def steps_per_epoch(self, type, batch_size, gpu_count=1):
         """
         From Keras documentation: Total number of steps (batches of samples) to yield from generator before
         declaring one epoch finished and starting the next epoch. It should typically be equal to the number of
         unique samples of your dataset divided by the batch size.
+        :param type: train | val | test
         :param batch_size:
         :param gpu_count:
         :return:
         """
-        return self._steps_per_epoch(len(self._training_data), batch_size, gpu_count)
-
-    def validation_steps(self, batch_size, gpu_count=1):
-        return self._steps_per_epoch(len(self._validation_data), batch_size, gpu_count)
+        return self._steps_per_epoch(len(self._data[type]), batch_size, gpu_count)
 
     @staticmethod
     def normalize(rgb, target_size):
@@ -190,16 +188,16 @@ class SimpleSegmentationGenerator:
 
         return seg_labels
 
-    def _flow(self, data, labels, batch_size, target_size):
+    def flow(self, type, labels, batch_size, target_size):
         """
-        :param data:
-        :param labels: (cityscapes_labels)
+        :param type: one of [train,val,test]
+        :param labels:
         :param batch_size:
-        :param target_size: (height, width)
-        :param debug_sample:
+        :param target_size:
         :return:
         """
-        zipped = itertools.cycle(data)
+
+        zipped = itertools.cycle(self._data[type])
         while True:
             X = []
             Y = []
@@ -217,17 +215,11 @@ class SimpleSegmentationGenerator:
 
             yield np.array(X), np.array(Y)
 
-    def training_flow(self, labels, batch_size, target_size):
-        return self._flow(self._training_data, labels, batch_size, target_size)
-
-    def validation_flow(self, labels, batch_size, target_size):
-        return self._flow(self._validation_data, labels, batch_size, target_size)
-
-    def validation_data(self, labels, batch_size, target_size):
+    def get_data(self, type, labels, batch_size, target_size):
         data = []
         labs = []
-        for i in range(len(self._validation_data)):
-            img, lab = next(self.validation_flow(labels, batch_size, target_size))
+        for i in range(len(self._data[type])):
+            img, lab = next(self.flow(type, labels, batch_size, target_size))
             for b in range(batch_size):
                 data.append(img[b])
                 labs.append(lab[b])
@@ -257,7 +249,7 @@ if __name__ == '__main__':
     n_classes = len(labels)
 
     i = 3
-    for img, label in datagen.training_flow(labels, batch_size, target_size):
+    for img, label in datagen.flow('train', labels, batch_size, target_size):
         print(i, img.shape, label.shape)
 
         # lol = labels_path + str(i).zfill(5) + '.png'
