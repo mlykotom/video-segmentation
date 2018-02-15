@@ -19,9 +19,9 @@ class SimpleSegmentationGenerator:
 
         self._data = {'train': [], 'val': [], 'test': []}
 
-        self._fill_split('train')
-        self._fill_split('val')
-        self._fill_split('test')
+        self._fill_split('train', images_path, labels_path)
+        self._fill_split('val', images_path, labels_path)
+        self._fill_split('test', images_path, labels_path)
 
         # sample for debugging
         if debug_samples > 0:
@@ -49,7 +49,7 @@ class SimpleSegmentationGenerator:
         # self._validation_data = zip(validation_img, validation_lab)
         # self._test_data = # TODO
 
-    def _fill_split(self, type):
+    def _fill_split(self, type, images_path, labels_path):
         split = self.get_filenames(type)
 
         for img_id in split:
