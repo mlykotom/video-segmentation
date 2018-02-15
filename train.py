@@ -13,10 +13,7 @@ from callbacks import *
 from loss import precision, dice_coef
 from models import *
 
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 implemented_models = ['segnet', 'mobile_unet']
-
 
 class Trainer:
     train_callbacks = []
@@ -100,6 +97,10 @@ class Trainer:
         return model.name + '_save_epoch-%d.h5' % epoch
 
     @staticmethod
+    def get_save_checkpoint_name(model):
+        return model.name + '_save_epoch.h5'
+
+    @staticmethod
     def get_last_epoch(model):
         """
         :param BaseModel model:
@@ -110,12 +111,13 @@ class Trainer:
         print("-- Attempt to load saved info %s" % filename)
         epoch = 0
         weights = None
-
+        run_name = None
         try:
             with open(filename, 'r') as fp:
                 obj = json.load(fp)
                 epoch = obj['epoch']
-                weights = Trainer.get_save_weights_name(model, epoch)
+                run_name = obj['run_name']
+                weights = Trainer.get_save_checkpoint_name(model)
 
         except IOError:
             print("Couldn't load %s file" % filename)
@@ -123,7 +125,7 @@ class Trainer:
             print("Couldn't load last epoch (file=%s) JSON values" % filename)
 
         print("-- Last epoch %d, weights file %s" % (epoch, weights is not None))
-        return epoch, weights
+        return epoch, run_name, weights
 
     @staticmethod
     def termination_save(model):
@@ -131,30 +133,38 @@ class Trainer:
         Saves last epoch model
         :param BaseModel model:
         """
-        epoch, _ = Trainer.get_last_epoch(model)
+        epoch, _, _ = Trainer.get_last_epoch(model)
         if epoch > 0:
             model.k.save(Trainer.get_save_weights_name(model, epoch), overwrite=True)
             print("===== saving model %s on epoch %d =====" % (model.name, epoch))
         else:
             print("===== SKIPPING saving model because epoch % =====")
 
-    def prepare_restarting(self, is_restart_set):
+    def prepare_restarting(self, is_restart_set, run_name):
         """
+        :param run_name:
         :param is_restart_set:
         :return:
         """
 
         # add save epoch to json callback
-        save_epoch_callback = SaveLastTrainedEpochCallback(self.model.name)
+        save_epoch_callback = SaveLastTrainedEpochCallback(self.model.name, run_name)
         self.train_callbacks.append(save_epoch_callback)
+
+        epoch_save = ModelCheckpoint(
+            self.get_save_checkpoint_name(self.model),
+            verbose=1,
+        )
+        self.train_callbacks.append(epoch_save)
 
         # register termination save
         atexit.register(self.termination_save, self.model)
 
         restart_epoch = 0
+        restart_run_name = None
+
         if is_restart_set:
-            # TODO if restarting, saving to the same run name as previous?
-            restart_epoch, weights_file = Trainer.get_last_epoch(self.model)
+            restart_epoch, restart_run_name, weights_file = Trainer.get_last_epoch(self.model)
 
             if weights_file is not None:
                 self.model.load_model(
@@ -165,7 +175,7 @@ class Trainer:
                     }
                 )
 
-        return restart_epoch
+        return restart_epoch, restart_run_name
 
     def prepare_callbacks(self, batch_size, epochs, run_name):
         # ------------- lr scheduler
@@ -204,10 +214,11 @@ class Trainer:
         self.val_steps = datagen.validation_steps(self.batch_size)
 
     def fit_model(self, run_name='', epochs=100, restart_training=False):
+        restart_epoch, restart_run_name = self.prepare_restarting(restart_training, run_name)
+        if restart_run_name is not None:
+            run_name = restart_run_name
 
         self.prepare_callbacks(self.batch_size, epochs, run_name)
-
-        restart_epoch = self.prepare_restarting(restart_training)
 
         self.model.k.fit_generator(
             generator=self.train_generator,
@@ -222,12 +233,13 @@ class Trainer:
 
 
 def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False,
-          n_gpu=1):
+          batch_size=None, n_gpu=1):
     # target_size = 360, 648
     target_size = 384, 640
     labels = cityscapes_labels.labels
+
     n_classes = len(labels)
-    batch_size = 2
+    batch_size = batch_size or 2
     epochs = 200
 
     trainer = Trainer.from_impl(model_name, target_size, n_classes, batch_size, is_debug, n_gpu)
@@ -262,6 +274,21 @@ if __name__ == '__main__':
         parser.add_argument('-g', '--gpus',
                             help='Number of GPUs used for training',
                             default=1)
+
+        parser.add_argument('-m', '--model',
+                            help='Model to train [segnet, mobile_unet]',
+                            default='mobile_unet')
+
+        parser.add_argument('-b', '--batch',
+                            help='Batch size',
+                            action='store_true',
+                            default=2)
+
+        parser.add_argument('--gid',
+                            help='GPU id',
+                            action='store_true',
+                            default=None)
+
         args = parser.parse_args()
         return args
 
@@ -273,20 +300,27 @@ if __name__ == '__main__':
     images_path = os.path.join(dataset_path, 'images/')
     labels_path = os.path.join(dataset_path, 'labels/')
 
-    model_name = 'mobile_unet'
-
     print("---------------")
     print('dataset path', dataset_path)
-    print('model', model_name)
+    print("GPUs number", args.gpus)
+    print("selected GPU ID", args.gid)
+    print("---------------")
+    print('model', args.model)
+    print("---------------")
     print("is debug", args.debug)
     print("restart training", args.restart)
-    print("GPUs number", args.gpus)
+    print("---------------")
+    print("batch size", args.batch)
     print("---------------")
 
+    if args.gid is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
+
     try:
-        train(images_path, labels_path, model_name, run_started,
+        train(images_path, labels_path, args.model, run_started,
               is_debug=args.debug,
               restart_training=args.restart,
+              batch_size=args.batch,
               n_gpu=int(args.gpus))
     except KeyboardInterrupt:
         print("Keyboard interrupted")
