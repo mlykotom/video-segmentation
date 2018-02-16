@@ -108,7 +108,7 @@ class Trainer:
         :return tuple(int, str): last saved  epoch or 0
         """
 
-        filename = SaveLastTrainedEpochCallback.get_model_file_name(model.name)
+        filename = SaveLastTrainedEpochCallback.get_model_file_name(model.name, model.is_debug)
         print("-- Attempt to load saved info %s" % filename)
         epoch = 0
         weights = None
@@ -149,7 +149,7 @@ class Trainer:
         """
 
         # add save epoch to json callback
-        save_epoch_callback = SaveLastTrainedEpochCallback(self.model.name, run_name)
+        save_epoch_callback = SaveLastTrainedEpochCallback(self.model.name, run_name, self.model.is_debug)
         self.train_callbacks.append(save_epoch_callback)
 
         epoch_save = ModelCheckpoint(
@@ -296,7 +296,6 @@ if __name__ == '__main__':
 
 
     args = parse_arguments()
-    run_started = strftime("%Y_%m_%d_%H:%M", gmtime())
 
     dataset_path = config.data_path('gta')
     images_path = os.path.join(dataset_path, 'images/')
@@ -318,8 +317,15 @@ if __name__ == '__main__':
     if args.gid is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
 
+    run_started = strftime("%Y_%m_%d_%H:%M", gmtime())
+
+    if args.debug:
+        run_name = 'd_' + run_started
+    else:
+        run_name = run_started
+
     try:
-        train(images_path, labels_path, args.model, run_started,
+        train(images_path, labels_path, args.model, run_name,
               is_debug=args.debug,
               restart_training=args.restart,
               batch_size=args.batch,

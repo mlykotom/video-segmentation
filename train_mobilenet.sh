@@ -2,7 +2,7 @@
 #PBS -m abe
 #PBS -q gpu
 #PBS -l walltime=12:00:00
-#PBS -l select=1:ncpus=3:ngpus=1:mem=4gb:gpu_cap=cuda35
+#PBS -l select=1:ncpus=3:ngpus=1:mem=4gb:gpu_cap=cuda35:cluster=doom
 #xxPBS -l scratch_ssd=1gb
 # chybovy vystup pripoji ke standarnimu vystupu a posle mail pri skonceni ulohy
 # direktivy si upravte/umazte dle potreb sveho vypoctu

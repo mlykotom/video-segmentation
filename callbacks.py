@@ -99,14 +99,15 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
     On epoch end saves currently finished epoch to file
     """
 
-    def __init__(self, model_name, run_name):
+    def __init__(self, model_name, run_name, is_debug):
         super(SaveLastTrainedEpochCallback, self).__init__()
         self.model_name = model_name
         self.run_name = run_name
+        self.is_debug = is_debug
 
     @staticmethod
-    def get_model_file_name(model_name):
-        return model_name + '.last_epoch.json'
+    def get_model_file_name(model_name, is_debug):
+        return model_name + ('_d' if is_debug else '') + '.last_epoch.json'
 
     def on_epoch_end(self, epoch, logs=None):
         """
@@ -115,6 +116,6 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
         :param logs:
         :return:
         """
-        with open(self.get_model_file_name(self.model_name), 'w') as fp:
+        with open(self.get_model_file_name(self.model_name, self.is_debug), 'w') as fp:
             # saves epoch + 1 (so that this is starting next time)
             json.dump({"epoch": epoch + 1, "run_name": self.run_name}, fp)
