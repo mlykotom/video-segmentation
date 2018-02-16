@@ -17,7 +17,12 @@ def data_path(dataset=None):
     except:
         home_user = os.environ['USER']
         if home_user == 'mlyko':
-            data_path = '/storage/brno7-cerit/home/mlyko/data/'
+            try:
+                # metacentrum try
+                if os.environ['WHICH_SERVER'] == 'metacentrum':
+                    data_path = '/storage/brno7-cerit/home/mlyko/data/'
+            except:
+                data_path = '/home/mlyko/data/'
         elif home_user == 'xmlyna06':
             data_path = '/home/xmlyna06/data/'
         else:

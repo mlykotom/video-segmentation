@@ -234,9 +234,12 @@ class Trainer:
 
 
 def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False,
-          batch_size=None, n_gpu=1):
+          batch_size=None, n_gpu=1, summaries=False):
     # target_size = 360, 648
-    target_size = 384, 640
+    # target_size = 384, 640
+    target_size = 288, 480
+    # target_size = (1052, 1914) # original
+
     # TODO make smaller
     labels = cityscapes_labels.labels
 
@@ -246,6 +249,9 @@ def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_de
 
     trainer = Trainer.from_impl(model_name, target_size, n_classes, batch_size, is_debug, n_gpu)
     model = trainer.compile_model()
+
+    if summaries:
+        trainer.summaries()
 
     trainer.prepare_data(images_path, labels_path, labels, target_size)
 
@@ -273,6 +279,11 @@ if __name__ == '__main__':
                             help='Just debug training (few images from dataset)',
                             default=False)
 
+        parser.add_argument('--summaries',
+                            action='store_true',
+                            help='If should plot model and summary',
+                            default=False)
+
         parser.add_argument('-g', '--gpus',
                             help='Number of GPUs used for training',
                             default=1)
@@ -283,12 +294,10 @@ if __name__ == '__main__':
 
         parser.add_argument('-b', '--batch',
                             help='Batch size',
-                            action='store_true',
                             default=2)
 
         parser.add_argument('--gid',
                             help='GPU id',
-                            action='store_true',
                             default=None)
 
         args = parser.parse_args()
@@ -322,7 +331,8 @@ if __name__ == '__main__':
         train(images_path, labels_path, args.model, run_started,
               is_debug=args.debug,
               restart_training=args.restart,
-              batch_size=args.batch,
-              n_gpu=int(args.gpus))
+              batch_size=int(args.batch),
+              n_gpu=int(args.gpus),
+              summaries=args.summaries)
     except KeyboardInterrupt:
         print("Keyboard interrupted")
