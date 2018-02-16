@@ -23,6 +23,8 @@ class SimpleSegmentationGenerator:
         self._fill_split('val', images_path, labels_path)
         self._fill_split('test', images_path, labels_path)
 
+        self._data['train'] = self._data['train'][:20]
+
         # sample for debugging
         if debug_samples > 0:
             self._data['train'] = self._data['train'][:debug_samples]
@@ -206,6 +208,9 @@ class SimpleSegmentationGenerator:
                 img_path, label_path = next(zipped)
 
                 img = cv2.imread(img_path)
+                if img is None:
+                    raise ValueError("Image %s was not found!" % img_path)
+
                 img = self.normalize(img, target_size)
                 X.append(img)
 
@@ -249,7 +254,7 @@ if __name__ == '__main__':
     n_classes = len(labels)
 
     i = 3
-    for img, label in datagen.flow('train', labels, batch_size, target_size):
+    for img, label in datagen.flow('val', labels, batch_size, target_size):
         print(i, img.shape, label.shape)
 
         # lol = labels_path + str(i).zfill(5) + '.png'
