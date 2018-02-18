@@ -14,6 +14,7 @@ from models import SegNet, MobileUNet
 
 implemented_models = ['segnet', 'mobile_unet']
 
+
 class Trainer:
     train_callbacks = []
 
@@ -40,18 +41,9 @@ class Trainer:
 
         return Trainer(model, batch_size, n_gpu, is_debug)
 
-    def __init__(self, model, batch_size, n_gpu, is_debug=False):
-        """
-
-        :param BaseModel model:
-        """
-        self.model = model
-        self.is_debug = is_debug
-
-        self.n_gpu = n_gpu
-        self.batch_size = batch_size * n_gpu
-        print("-- Number of GPUs used %d" % self.n_gpu)
-        print("-- Batch size (on all GPUs) %d" % self.batch_size)
+    @staticmethod
+    def get_save_checkpoint_name(model):
+        return model.name + ('_d' if model.is_debug else '') + '_save_epoch.h5'
 
     @staticmethod
     def get_gpus():
@@ -62,42 +54,9 @@ class Trainer:
         from tensorflow.python.client import device_lib
         return device_lib.list_local_devices()
 
-    def summaries(self):
-        self.model.summary()
-        self.model.plot_model()
-
-    def compile_model(self):
-        # if is_debug:
-        #     model.k.compile(
-        #         optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
-        #         loss=keras.losses.categorical_crossentropy,
-        #         metrics=[
-        #             dice_coef,
-        #             precision,
-        #             keras.metrics.categorical_accuracy
-        #         ],
-        #     )
-        # else:
-
-        self.model.k.compile(
-            loss=keras.losses.categorical_crossentropy,
-            optimizer=optimizers.Adam(lr=0.001),
-            metrics=[
-                dice_coef,
-                precision,
-                keras.metrics.categorical_accuracy
-            ]
-        )
-
-        return self.model
-
     @staticmethod
     def get_save_weights_name(model, epoch):
         return model.name + ('_d' if model.is_debug else '') + '_save_epoch-%d.h5' % epoch
-
-    @staticmethod
-    def get_save_checkpoint_name(model):
-        return model.name + ('_d' if model.is_debug else '') + '_save_epoch.h5'
 
     @staticmethod
     def get_last_epoch(model):
@@ -139,6 +98,52 @@ class Trainer:
         else:
             print("===== SKIPPING saving model because epoch % =====")
 
+    @staticmethod
+    def get_run_path(model, run_name):
+        return model.name + ('_d' if model.is_debug else '') + '_' + run_name
+
+    def __init__(self, model, batch_size, n_gpu, is_debug=False):
+        """
+
+        :param BaseModel model:
+        """
+        self.model = model
+        self.is_debug = is_debug
+
+        self.n_gpu = n_gpu
+        self.batch_size = batch_size * n_gpu
+        print("-- Number of GPUs used %d" % self.n_gpu)
+        print("-- Batch size (on all GPUs) %d" % self.batch_size)
+
+    def summaries(self):
+        self.model.summary()
+        self.model.plot_model()
+
+    def compile_model(self):
+        # if is_debug:
+        #     model.k.compile(
+        #         optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
+        #         loss=keras.losses.categorical_crossentropy,
+        #         metrics=[
+        #             dice_coef,
+        #             precision,
+        #             keras.metrics.categorical_accuracy
+        #         ],
+        #     )
+        # else:
+
+        self.model.k.compile(
+            loss=keras.losses.categorical_crossentropy,
+            optimizer=optimizers.Adam(lr=0.001),
+            metrics=[
+                dice_coef,
+                precision,
+                keras.metrics.categorical_accuracy
+            ]
+        )
+
+        return self.model
+
     def prepare_restarting(self, is_restart_set, run_name):
         """
         :param run_name:
@@ -176,10 +181,6 @@ class Trainer:
 
         return restart_epoch, restart_run_name
 
-    @staticmethod
-    def get_run_path(model, run_name):
-        return model.name + ('_d' if model.is_debug else '') + '_' + run_name
-
     def prepare_callbacks(self, batch_size, epochs, run_name):
         # ------------- lr scheduler
         lr_base = 0.01 * (float(batch_size) / 16)
@@ -191,7 +192,8 @@ class Trainer:
         self.train_callbacks.append(tb)
 
         # ------------- model checkpoint
-        filepath = "weights/" + self.get_run_path(self.model, run_name) + '_cat_acc-{categorical_accuracy:.2f}.hdf5'
+        filepath = "weights/" + self.get_run_path(self.model,
+                                                  '_cat_acc-{categorical_accuracy:.2f}' + run_name) + '.hdf5'
         checkpoint = ModelCheckpoint(
             filepath,
             monitor='val_categorical_accuracy',
@@ -231,7 +233,9 @@ class Trainer:
             verbose=1,
             validation_data=self.val_generator,
             validation_steps=self.val_steps,
-            callbacks=self.train_callbacks
+            callbacks=self.train_callbacks,
+            use_multiprocessing=True,
+            max_queue_size=100,
         )
 
 

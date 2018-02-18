@@ -23,8 +23,6 @@ class SimpleSegmentationGenerator:
         self._fill_split('val', images_path, labels_path)
         self._fill_split('test', images_path, labels_path)
 
-        self._data['train'] = self._data['train'][:20]
-
         # sample for debugging
         if debug_samples > 0:
             self._data['train'] = self._data['train'][:debug_samples]
@@ -223,11 +221,21 @@ class SimpleSegmentationGenerator:
     def get_data(self, type, labels, batch_size, target_size):
         data = []
         labs = []
-        for i in range(len(self._data[type])):
+        from utils import print_progress
+        # A List of Items
+        data_length = len(self._data[type])
+
+        # Initial call to print 0% progress
+        print_progress(0, data_length, prefix='Progress:', suffix='Complete', bar_length=50)
+
+        for i in range(data_length):
             img, lab = next(self.flow(type, labels, batch_size, target_size))
             for b in range(batch_size):
                 data.append(img[b])
                 labs.append(lab[b])
+
+            # Update Progress Bar
+            print_progress(i + 1, data_length, prefix='Progress:', suffix='Complete', bar_length=50)
 
         return np.array(data), np.array(labs)
 
@@ -240,10 +248,7 @@ if __name__ == '__main__':
 
     datagen = SimpleSegmentationGenerator(
         images_path=images_path,
-        labels_path=labels_path,
-        validation_split=0.2,
-        # debug_samples=20
-        shuffle=True
+        labels_path=labels_path
     )
 
     batch_size = 1

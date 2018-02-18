@@ -99,12 +99,7 @@ if __name__ == '__main__':
     if args.gid is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
 
-    run_started = strftime("%Y_%m_%d_%H:%M", gmtime())
-
-    if args.debug:
-        run_name = 'd_' + run_started
-    else:
-        run_name = run_started
+    run_name = strftime("%Y_%m_%d_%H:%M", gmtime())
 
     try:
         train(images_path, labels_path, args.model, run_name,
