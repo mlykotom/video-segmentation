@@ -10,9 +10,9 @@ import cityscapes_labels
 import data_generator
 import metrics
 from callbacks import SaveLastTrainedEpochCallback, lr_scheduler, tensorboard
-from models import SegNet, MobileUNet
+from models import *
 
-implemented_models = ['segnet', 'mobile_unet']
+implemented_models = ['segnet', 'old_mobnet']
 
 
 class Trainer:
@@ -31,8 +31,10 @@ class Trainer:
 
         if model_name == 'segnet':
             model = SegNet(target_size, n_classes, is_debug=is_debug)
-        elif model_name == 'mobile_unet':
+        elif model_name == 'old_mobnet':
             model = MobileUNet(target_size, n_classes, is_debug=is_debug)
+        elif model_name == 'mobile_unet':
+            model = MobileNetUnet(target_size, n_classes, is_debug)
         else:
             raise NotImplemented('Model must be one of [' + ','.join(implemented_models) + ']')
 
@@ -100,7 +102,7 @@ class Trainer:
 
     @staticmethod
     def get_run_path(model, run_name):
-        return model.name + ('_d' if model.is_debug else '') + '_' + run_name
+        return ('debug/' if model.is_debug else '') + model.name + '_' + run_name
 
     def __init__(self, model, batch_size, n_gpu, is_debug=False):
         """
@@ -147,6 +149,7 @@ class Trainer:
 
     def prepare_restarting(self, is_restart_set, run_name):
         """
+        TODO save batch_number in order to have the same values
         :param run_name:
         :param is_restart_set:
         :return:
@@ -189,12 +192,13 @@ class Trainer:
         self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
 
         # ------------- tensorboard
+        # TODO copy output folder after each epoch to remote server
         tb = tensorboard('../logs', self.get_run_path(self.model, run_name), histogram_freq=0)
         self.train_callbacks.append(tb)
 
         # ------------- model checkpoint
-        filepath = "weights/" + self.get_run_path(self.model,
-                                                  '_cat_acc-{categorical_accuracy:.2f}' + run_name) + '.hdf5'
+        filepath = "../weights/" + self.get_run_path(self.model,
+                                                     run_name) + '_cat_acc-{categorical_accuracy:.2f}' + '.hdf5'
         checkpoint = ModelCheckpoint(
             filepath,
             monitor='val_categorical_accuracy',
@@ -203,10 +207,6 @@ class Trainer:
             mode='max'
         )
         self.train_callbacks.append(checkpoint)
-
-        # ---- remote monitoring
-        remote_monitor = keras.callbacks.RemoteMonitor('http://68.146.248.105:6150')
-        self.train_callbacks.append(remote_monitor)
 
     def prepare_data(self, images_path, labels_path, labels, target_size):
         # ------------- data generator
