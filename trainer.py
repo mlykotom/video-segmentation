@@ -8,8 +8,8 @@ from keras.callbacks import ModelCheckpoint
 
 import cityscapes_labels
 import data_generator
+import metrics
 from callbacks import SaveLastTrainedEpochCallback, lr_scheduler, tensorboard
-from loss import dice_coef, precision
 from models import SegNet, MobileUNet
 
 implemented_models = ['segnet', 'mobile_unet']
@@ -136,9 +136,10 @@ class Trainer:
             loss=keras.losses.categorical_crossentropy,
             optimizer=optimizers.Adam(lr=0.001),
             metrics=[
-                dice_coef,
-                precision,
-                keras.metrics.categorical_accuracy
+                metrics.dice_coef,
+                metrics.precision,
+                keras.metrics.categorical_accuracy,
+                metrics.mean_iou
             ]
         )
 
@@ -174,8 +175,8 @@ class Trainer:
                 self.model.load_model(
                     weights_file,
                     custom_objects={
-                        'dice_coef': dice_coef,
-                        'precision': precision,
+                        'dice_coef': metrics.dice_coef,
+                        'precision': metrics.precision,
                     }
                 )
 
@@ -202,6 +203,10 @@ class Trainer:
             mode='max'
         )
         self.train_callbacks.append(checkpoint)
+
+        # ---- remote monitoring
+        remote_monitor = keras.callbacks.RemoteMonitor('http://68.146.248.105:6150')
+        self.train_callbacks.append(remote_monitor)
 
     def prepare_data(self, images_path, labels_path, labels, target_size):
         # ------------- data generator

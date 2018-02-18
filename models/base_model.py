@@ -83,7 +83,7 @@ class BaseModel:
         :param str to_file:
         """
         if to_file is None:
-            to_file = 'model_%s_%dx%d.png' % (self.name, self.target_size[0], self.target_size[1])
+            to_file = 'models/model_%s_%dx%d.png' % (self.name, self.target_size[0], self.target_size[1])
 
             keras.utils.plot_model(
                 self.k,
