@@ -12,8 +12,6 @@ import metrics
 from callbacks import SaveLastTrainedEpochCallback, lr_scheduler, tensorboard
 from models import *
 
-implemented_models = ['segnet', 'old_mobnet']
-
 
 class Trainer:
     train_callbacks = []
@@ -31,12 +29,12 @@ class Trainer:
 
         if model_name == 'segnet':
             model = SegNet(target_size, n_classes, is_debug=is_debug)
-        elif model_name == 'old_mobnet':
+        elif model_name == 'app_mobnet':
             model = MobileUNet(target_size, n_classes, is_debug=is_debug)
         elif model_name == 'mobile_unet':
             model = MobileNetUnet(target_size, n_classes, is_debug)
         else:
-            raise NotImplemented('Model must be one of [' + ','.join(implemented_models) + ']')
+            raise NotImplemented('Model must be one of [' + ','.join(['segnet', 'mobnet', 'app_mobnet']) + ']')
 
         if n_gpu > 1:
             model.make_multi_gpu(n_gpu)
@@ -136,7 +134,7 @@ class Trainer:
 
         self.model.k.compile(
             loss=keras.losses.categorical_crossentropy,
-            optimizer=optimizers.Adam(lr=0.001),
+            optimizer=optimizers.Adam(),
             metrics=[
                 metrics.dice_coef,
                 metrics.precision,
@@ -180,6 +178,7 @@ class Trainer:
                     custom_objects={
                         'dice_coef': metrics.dice_coef,
                         'precision': metrics.precision,
+                        'mean_iou': metrics.mean_iou
                     }
                 )
 
@@ -187,9 +186,9 @@ class Trainer:
 
     def prepare_callbacks(self, batch_size, epochs, run_name):
         # ------------- lr scheduler
-        lr_base = 0.01 * (float(batch_size) / 16)
-        lr_power = 0.9
-        self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
+        # lr_base = 0.01 * (float(batch_size) / 16)
+        # lr_power = 0.9
+        # self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
 
         # ------------- tensorboard
         # TODO copy output folder after each epoch to remote server
