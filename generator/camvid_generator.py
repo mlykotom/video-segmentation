@@ -111,10 +111,35 @@ class CamVidGenerator(BaseDataGenerator):
         self._data[which_set] = filenames
 
     def normalize(self, rgb, target_size):
-        return BaseDataGenerator.default_normalize(rgb, target_size)
+        rgb = cv2.resize(rgb, (target_size[1], target_size[0]))
+        return rgb
+        # return BaseDataGenerator.default_normalize(rgb, target_size)
 
     def one_hot_encoding(self, label_img, target_size):
         return BaseDataGenerator.default_one_hot_encoding(label_img, self.get_labels(), target_size)
+
+
+def calc_optical_flow(old, new, flow_type):
+    old_gray = cv2.cvtColor(old, cv2.COLOR_RGB2GRAY)
+    new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
+
+    if flow_type == 'dis':
+        disFlow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
+        flow = disFlow.calc(old_gray, new_gray, None)
+    else:
+        flow = cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+
+    return flow
+
+
+def flow_to_bgr(flow, old):
+    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+    hsv = np.zeros_like(old)
+    hsv[..., 1] = 255
+    hsv[..., 0] = ang * 180 / np.pi / 2
+    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    return bgr
 
 
 if __name__ == '__main__':
@@ -130,13 +155,10 @@ if __name__ == '__main__':
     import os
 
     dataset_path = config.data_path('camvid')
-    images_path = os.path.join(dataset_path, 'images_prepped_train/')
-    labels_path = os.path.join(dataset_path, 'annotations_prepped_train/')
-
     datagen = CamVidGenerator(dataset_path)
 
     batch_size = 1
-    target_size = (360, 648)
+    target_size = (360, 480)
 
 
     def get_color_from_label(class_id_image):
@@ -146,15 +168,31 @@ if __name__ == '__main__':
         return colored_image
 
 
-    for img, label in datagen.flow('train', batch_size, target_size):
-        print(img.shape, label.shape)
-
-        class_scores = label[0]
+    def one_hot_to_bgr(label):
         class_scores = label.reshape((target_size[0], target_size[1], datagen.get_n_classes()))
         class_image = np.argmax(class_scores, axis=2)
         colored_class_image = get_color_from_label(class_image)
         colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
+        return colored_class_image
+
+
+    old_img = None
+    for img, label in datagen.flow('train', batch_size, target_size):
+        print(img.shape, label.shape)
+
+        colored_class_image = one_hot_to_bgr(label[0])
+
+        if old_img is not None:
+            dis_flow = calc_optical_flow(old_img, img[0], 'dis')
+            dis_bgr = flow_to_bgr(dis_flow, old_img)
+            cv2.imshow("dis_flow", dis_bgr)
+
+            flan_flow = calc_optical_flow(old_img, img[0], 'flan')
+            flan_bgr = flow_to_bgr(flan_flow, old_img)
+            cv2.imshow("flan", flan_bgr)
 
         cv2.imshow("normalized", img[0])
         cv2.imshow("gt", colored_class_image)
         cv2.waitKey()
+
+        old_img = img[0]
