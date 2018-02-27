@@ -169,3 +169,6 @@ weights/*
 
 model_*.png
 results/*
+
+*.h5
+*.hdf5

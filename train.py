@@ -7,7 +7,7 @@ from callbacks import *
 from trainer import Trainer
 
 
-def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False,
+def train(dataset_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False,
           batch_size=None, n_gpu=1, summaries=False):
     # TODO make smaller
     # target_size = 360, 648
@@ -15,8 +15,7 @@ def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_de
     target_size = 288, 480
     # target_size = (1052, 1914) # original
 
-    labels = cityscapes_labels.labels
-    n_classes = len(labels)
+    n_classes = len(cityscapes_labels.labels)
     batch_size = batch_size or 2
     epochs = 200
 
@@ -26,7 +25,7 @@ def train(images_path, labels_path, model_name='mobile_unet', run_name='', is_de
     if summaries:
         trainer.summaries()
 
-    trainer.prepare_data(images_path, labels_path, labels, target_size)
+    trainer.prepare_data(dataset_path, target_size)
 
     # train model
     trainer.fit_model(
@@ -80,8 +79,6 @@ if __name__ == '__main__':
     args = parse_arguments()
 
     dataset_path = config.data_path('gta')
-    images_path = os.path.join(dataset_path, 'images/')
-    labels_path = os.path.join(dataset_path, 'labels/')
 
     print("---------------")
     print('dataset path', dataset_path)
@@ -102,7 +99,7 @@ if __name__ == '__main__':
     run_name = strftime("%Y_%m_%d_%H:%M", gmtime())
 
     try:
-        train(images_path, labels_path, args.model, run_name,
+        train(dataset_path, args.model, run_name,
               is_debug=args.debug,
               restart_training=args.restart,
               batch_size=int(args.batch),

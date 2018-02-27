@@ -5,10 +5,6 @@ import os
 import cv2
 import numpy as np
 
-import cityscapes_labels
-import config
-import utils
-
 
 class SimpleSegmentationGenerator:
 
@@ -31,23 +27,6 @@ class SimpleSegmentationGenerator:
         print("training samples %d, validating samples %d, test samples %d" %
               (len(self._data['train']), len(self._data['val']), len(self._data['test']))
               )
-
-        # if shuffle:
-        #     c = list(zip(images, labels))
-        #     random.shuffle(c)
-        #     images, labels = zip(*c)
-
-        # same amount of files
-        # assert len(images) == len(labels)
-
-        # split_index = int((1.0 - validation_split) * len(images))
-        #
-        # training_img, training_lab = images[:split_index], labels[:split_index]
-        # validation_img, validation_lab = images[split_index:], labels[split_index:]
-
-        # self._training_data = zip(training_img, training_lab)
-        # self._validation_data = zip(validation_img, validation_lab)
-        # self._test_data = # TODO
 
     def _fill_split(self, type, images_path, labels_path):
         split = self.get_filenames(type)
@@ -241,6 +220,18 @@ class SimpleSegmentationGenerator:
 
 
 if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    else:
+        __package__ = ''
+
+    import cityscapes_labels
+    import config
+    import utils
+
     dataset_path = config.data_path('gta')
 
     images_path = os.path.join(dataset_path, 'images/')
