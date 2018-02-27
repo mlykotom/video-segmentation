@@ -23,6 +23,8 @@ def data_path(dataset=None):
                     data_path = '/storage/brno7-cerit/home/mlyko/data/'
             except:
                 data_path = '/home/mlyko/data/'
+        elif home_user == 'mlykotom':
+            data_path = '/Volumes/mlydrive/data/'
         elif home_user == 'xmlyna06':
             data_path = '/home/xmlyna06/data/'
         else:

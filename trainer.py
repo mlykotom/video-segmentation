@@ -7,9 +7,9 @@ from keras import optimizers
 from keras.callbacks import ModelCheckpoint
 
 import cityscapes_labels
-import data_generator
 import metrics
-from callbacks import SaveLastTrainedEpochCallback, lr_scheduler, tensorboard
+from callbacks import SaveLastTrainedEpochCallback, tensorboard
+from generator import data_generator
 from models import *
 
 
@@ -200,26 +200,22 @@ class Trainer:
                                                      run_name) + '_cat_acc-{categorical_accuracy:.2f}' + '.hdf5'
         checkpoint = ModelCheckpoint(
             filepath,
-            monitor='val_categorical_accuracy',
+            monitor='val_loss',
             verbose=1,
             save_best_only=True,
-            mode='max'
+            mode='min'
         )
         self.train_callbacks.append(checkpoint)
 
-    def prepare_data(self, images_path, labels_path, labels, target_size):
+    def prepare_data(self, dataset_path, target_size):
         # ------------- data generator
-        datagen = data_generator.SimpleSegmentationGenerator(
-            images_path=images_path,
-            labels_path=labels_path,
-            validation_split=0.2,
-            debug_samples=20 if self.is_debug else 0
-        )
+        datagen = data_generator.GTAGenerator(dataset_path,
+                                              debug_samples=20 if self.is_debug else 0)
 
         # TODO find other way than this
-        self.train_generator = datagen.flow('train', labels, self.batch_size, target_size)
+        self.train_generator = datagen.flow('train', self.batch_size, target_size)
         self.train_steps = datagen.steps_per_epoch('train', self.batch_size)
-        self.val_generator = datagen.flow('val', labels, self.batch_size, target_size)
+        self.val_generator = datagen.flow('val', self.batch_size, target_size)
         self.val_steps = datagen.steps_per_epoch('val', self.batch_size)
 
     def fit_model(self, run_name='', epochs=100, restart_training=False):

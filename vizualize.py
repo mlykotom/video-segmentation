@@ -48,7 +48,7 @@ def vizualize(prediction, target_width, target_height, n_classes):
 image = cv2.imread(images_path + '00008.png')
 print(image.shape)
 
-norm = data_generator.SimpleSegmentationGenerator.normalize(image, (target_height, target_width))
+norm = data_generator.SimpleSegmentationGenerator.default_normalize(image, (target_height, target_width))
 
 for_prediction = np.array([norm])
 prediction = model.predict_proba(for_prediction, batch_size, verbose=1)

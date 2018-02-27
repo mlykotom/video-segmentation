@@ -7,7 +7,7 @@ from keras import losses, optimizers
 import cityscapes_labels
 import config
 import metrics
-from data_generator import SimpleSegmentationGenerator
+from generator.data_generator import GTAGenerator
 from models import MobileUNet
 
 batch_size = 1
@@ -35,16 +35,12 @@ model.k.compile(
     ]
 )
 
-datagen = SimpleSegmentationGenerator(
-    images_path=images_path,
-    labels_path=labels_path
-)
-
+datagen = GTAGenerator(dataset_path)
 
 eval_batch_size = 4
 
 prediction = model.k.evaluate_generator(
-    generator=datagen.flow('test', labels, eval_batch_size, target_size),
+    generator=datagen.flow('test', eval_batch_size, target_size),
     steps=datagen.steps_per_epoch('test', eval_batch_size),
 )
 
