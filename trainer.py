@@ -43,7 +43,7 @@ class Trainer:
 
     @staticmethod
     def get_save_checkpoint_name(model):
-        return model.name + ('_d' if model.is_debug else '') + '_save_epoch.h5'
+        return './checkpoint/' + model.name + ('_d' if model.is_debug else '') + '_save_epoch.h5'
 
     @staticmethod
     def get_gpus():
@@ -192,12 +192,13 @@ class Trainer:
 
         # ------------- tensorboard
         # TODO copy output folder after each epoch to remote server
-        tb = tensorboard('../logs', self.get_run_path(self.model, run_name), histogram_freq=0)
+        tb = tensorboard('../../logs', self.get_run_path(self.model, run_name), histogram_freq=0)
         self.train_callbacks.append(tb)
 
         # ------------- model checkpoint
-        filepath = "../weights/" + self.get_run_path(self.model,
-                                                     run_name) + '_cat_acc-{categorical_accuracy:.2f}' + '.hdf5'
+        # TODO will not work on PChradis or METACENTRUM!
+        filepath = "../../weights/" + self.get_run_path(self.model,
+                                                        run_name) + '.h5'  # + '_cat_acc-{categorical_accuracy:.2f}'
         checkpoint = ModelCheckpoint(
             filepath,
             monitor='val_loss',

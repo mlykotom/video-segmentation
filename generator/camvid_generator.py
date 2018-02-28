@@ -1,7 +1,9 @@
 import glob
+import itertools
 
 import cv2
 import numpy as np
+import tensorflow as tf
 
 from base_generator import BaseDataGenerator
 
@@ -86,34 +88,77 @@ class CamVidGenerator(BaseDataGenerator):
         # if which_set == 'test':
         #     img_files = glob.glob(img_path + '0006R0_' + "*.png")
         #     lab_files = glob.glob(lab_path + '0006R0_' + "*.png")
-        if which_set == 'val':
-            img_files = glob.glob(img_path + '0001TP_' + "*.png")
-            lab_files = glob.glob(lab_path + '0001TP_' + "*.png")
-        elif which_set == 'train':
-            img_files = glob.glob(img_path + '0016E5_' + "*.png") \
-                        + glob.glob(img_path + 'Seq05VD_' + "*.png") \
-                        + glob.glob(img_path + '0006R0_' + "*.png")
+        # if which_set == 'val':
+        #     img_files = glob.glob(img_path + '0001TP_' + "*.png")
+        #     lab_files = glob.glob(lab_path + '0001TP_' + "*.png")
+        # elif which_set == 'train':
+        #     img_files = glob.glob(img_path + '0016E5_' + "*.png") \
+        #                 + glob.glob(img_path + 'Seq05VD_' + "*.png") \
+        #                 + glob.glob(img_path + '0006R0_' + "*.png")
+        #
+        #     lab_files = glob.glob(lab_path + '0016E5_' + "*.png") \
+        #                 + glob.glob(lab_path + 'Seq05VD_' + "*.png") \
+        #                 + glob.glob(lab_path + '0006R0_' + "*.png")
+        # else:
+        #     img_files = []
+        #     lab_files = []
+        #
+        # assert len(img_files) == len(lab_files)
+        # img_files.sort()
+        # lab_files.sort()
 
-            lab_files = glob.glob(lab_path + '0016E5_' + "*.png") \
-                        + glob.glob(lab_path + 'Seq05VD_' + "*.png") \
-                        + glob.glob(lab_path + '0006R0_' + "*.png")
-        else:
-            img_files = []
-            lab_files = []
-
-        assert len(img_files) == len(lab_files)
+        img_files = glob.glob(img_path + '0016E5_' + "*.png")
         img_files.sort()
+        lab_files = glob.glob(lab_path + '0016E5_' + "*.png")
         lab_files.sort()
+        #  + glob.glob(img_path + 'Seq05VD_' + "*.png") \
+        # + glob.glob(img_path + '0006R0_' + "*.png")
 
-        filenames = zip(img_files, lab_files)
+        # it = iter(img_files)
+        # what = itertools.izip(it, it)
+
+        pair_of_imgs = zip(img_files, img_files[1::1])
+
+        filenames = zip(pair_of_imgs, lab_files[1:])
+        # print(filenames)
+        # exit()
 
         print('CamVid: ' + which_set + ' ' + str(len(filenames)) + ' files')
         self._data[which_set] = filenames
 
+    def _load_img(self, img_path):
+        img = cv2.imread(img_path)
+        if img is None:
+            raise ValueError("Image %s was not found!" % img_path)
+        return img
+
+    def flow(self, type, batch_size, target_size):
+        zipped = itertools.cycle(self._data[type])
+        while True:
+            X = []
+            Y = []
+
+            for _ in range(batch_size):
+                (img_old_path, img_new_path), label_path = next(zipped)
+
+                img = self._load_img(img_old_path)
+                img = cv2.resize(img, (target_size[1], target_size[0]))
+                # img = self.normalize(img, target_size)
+
+                img2 = self._load_img(img_new_path)
+                img2 = cv2.resize(img2, (target_size[1], target_size[0]))
+                # img2 = self.normalize(img2, target_size)
+
+                X.append((img, img2))
+
+                seg_tensor = cv2.imread(label_path)
+                seg_tensor = self.one_hot_encoding(seg_tensor, target_size)
+                Y.append(seg_tensor)
+
+            yield np.array(X), np.array(Y)
+
     def normalize(self, rgb, target_size):
-        rgb = cv2.resize(rgb, (target_size[1], target_size[0]))
-        return rgb
-        # return BaseDataGenerator.default_normalize(rgb, target_size)
+        return BaseDataGenerator.default_normalize(rgb, target_size)
 
     def one_hot_encoding(self, label_img, target_size):
         return BaseDataGenerator.default_one_hot_encoding(label_img, self.get_labels(), target_size)
@@ -140,6 +185,111 @@ def flow_to_bgr(flow, old):
     hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
     bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     return bgr
+
+
+def tf_warp(img, flow, H, W):
+    def get_pixel_value(img, x, y):
+        """
+        Utility function to get pixel value for coordinate
+        vectors x and y from a  4D tensor image.
+        Input
+        -----
+        - img: tensor of shape (B, H, W, C)
+        - x: flattened tensor of shape (B*H*W, )
+        - y: flattened tensor of shape (B*H*W, )
+        Returns
+        -------
+        - output: tensor of shape (B, H, W, C)
+        """
+        shape = tf.shape(x)
+        batch_size = shape[0]
+        height = shape[1]
+        width = shape[2]
+
+        batch_idx = tf.range(0, batch_size)
+        batch_idx = tf.reshape(batch_idx, (batch_size, 1, 1))
+        b = tf.tile(batch_idx, (1, height, width))
+
+        indices = tf.stack([b, y, x], 3)
+
+        return tf.gather_nd(img, indices)
+
+    #    H = 256
+    #    W = 256
+    x, y = tf.meshgrid(tf.range(W), tf.range(H))
+    x = tf.expand_dims(x, 0)
+    x = tf.expand_dims(x, 0)
+
+    y = tf.expand_dims(y, 0)
+    y = tf.expand_dims(y, 0)
+
+    x = tf.cast(x, tf.float32)
+    y = tf.cast(y, tf.float32)
+    grid = tf.concat([x, y], axis=1)
+    #    print grid.shape
+    flows = grid + flow
+    print flows.shape
+    max_y = tf.cast(H - 1, tf.int32)
+    max_x = tf.cast(W - 1, tf.int32)
+    zero = tf.zeros([], dtype=tf.int32)
+
+    x = flows[:, 0, :, :]
+    y = flows[:, 1, :, :]
+    x0 = x
+    y0 = y
+    x0 = tf.cast(x0, tf.int32)
+    x1 = x0 + 1
+    y0 = tf.cast(y0, tf.int32)
+    y1 = y0 + 1
+
+    # clip to range [0, H/W] to not violate img boundaries
+    x0 = tf.clip_by_value(x0, zero, max_x)
+    x1 = tf.clip_by_value(x1, zero, max_x)
+    y0 = tf.clip_by_value(y0, zero, max_y)
+    y1 = tf.clip_by_value(y1, zero, max_y)
+
+    # get pixel value at corner coords
+    Ia = get_pixel_value(img, x0, y0)
+    Ib = get_pixel_value(img, x0, y1)
+    Ic = get_pixel_value(img, x1, y0)
+    Id = get_pixel_value(img, x1, y1)
+
+    # recast as float for delta calculation
+    x0 = tf.cast(x0, tf.float32)
+    x1 = tf.cast(x1, tf.float32)
+    y0 = tf.cast(y0, tf.float32)
+    y1 = tf.cast(y1, tf.float32)
+
+    # calculate deltas
+    wa = (x1 - x) * (y1 - y)
+    wb = (x1 - x) * (y - y0)
+    wc = (x - x0) * (y1 - y)
+    wd = (x - x0) * (y - y0)
+
+    # add dimension for addition
+    wa = tf.expand_dims(wa, axis=3)
+    wb = tf.expand_dims(wb, axis=3)
+    wc = tf.expand_dims(wc, axis=3)
+    wd = tf.expand_dims(wd, axis=3)
+
+    # compute output
+    out = tf.add_n([wa * Ia, wb * Ib, wc * Ic, wd * Id])
+    return out
+
+
+def calcWarp(img_old, flow_arr, size):
+    with tf.Session() as sess:
+        a = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+        flow_vec = tf.placeholder(tf.float32, shape=[None, 2, None, None])
+
+        init = tf.global_variables_initializer()
+        sess.run(init)
+        warp_graph = tf_warp(a, flow_arr, size[0], size[1])
+
+        out = sess.run(warp_graph, feed_dict={a: np.array([img_old]), flow_vec: flow_arr})
+        out = np.clip(out, 0, 255).astype('uint8')
+        winner = out[0].astype('uint8')
+        return winner
 
 
 if __name__ == '__main__':
@@ -176,23 +326,27 @@ if __name__ == '__main__':
         return colored_class_image
 
 
-    old_img = None
-    for img, label in datagen.flow('train', batch_size, target_size):
-        print(img.shape, label.shape)
+    for imgBatch, labelBatch in datagen.flow('train', batch_size, target_size):
+        img, img2 = imgBatch[0]
+        label = labelBatch[0]
+        print(img.shape, img2.shape, label.shape)
 
-        colored_class_image = one_hot_to_bgr(label[0])
+        colored_class_image = one_hot_to_bgr(label)
 
-        if old_img is not None:
-            dis_flow = calc_optical_flow(old_img, img[0], 'dis')
-            dis_bgr = flow_to_bgr(dis_flow, old_img)
-            cv2.imshow("dis_flow", dis_bgr)
+        flan_flow = calc_optical_flow(img, img2, 'flan')
+        flan_bgr = flow_to_bgr(flan_flow, img)
+        cv2.imshow("flan", flan_bgr)
 
-            flan_flow = calc_optical_flow(old_img, img[0], 'flan')
-            flan_bgr = flow_to_bgr(flan_flow, old_img)
-            cv2.imshow("flan", flan_bgr)
+        dis_flow = calc_optical_flow(img, img2, 'dis')
+        dis_bgr = flow_to_bgr(dis_flow, img)
+        cv2.imshow("dis_flow", dis_bgr)
 
-        cv2.imshow("normalized", img[0])
+        flow = np.rollaxis(flan_flow, -1, 0)
+
+        winner = calcWarp(img, np.array([flow]), target_size)
+        cv2.imshow("winner", winner)
+
+        cv2.imshow("old", img)
+        cv2.imshow("new", img2)
         cv2.imshow("gt", colored_class_image)
         cv2.waitKey()
-
-        old_img = img[0]
