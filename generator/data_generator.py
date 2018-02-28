@@ -6,14 +6,12 @@ import numpy as np
 from base_generator import BaseDataGenerator
 
 
-# from .. import cityscapes_labels
-
-
 class GTAGenerator(BaseDataGenerator):
     def __init__(self, dataset_path, debug_samples=0):
         super(GTAGenerator, self).__init__(dataset_path, debug_samples)
 
     def get_labels(self):
+        import cityscapes_labels
         return [lab.color for lab in cityscapes_labels.labels]
 
     def get_n_classes(self):
@@ -39,7 +37,7 @@ class GTAGenerator(BaseDataGenerator):
         import scipy.io
 
         filenames = []
-        split = scipy.io.loadmat(os.path.join('../gta_read_mapping', 'split.mat'))
+        split = scipy.io.loadmat(os.path.join('./gta_read_mapping', 'split.mat'))
         split = split[which_set + "Ids"]
 
         # To remove (Files with different size in img and mask)

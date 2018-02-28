@@ -107,7 +107,7 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
 
     @staticmethod
     def get_model_file_name(model_name, is_debug):
-        return model_name + ('_d' if is_debug else '') + '.last_epoch.json'
+        return './checkpoint/' + model_name + ('_d' if is_debug else '') + '.last_epoch.json'
 
     def on_epoch_end(self, epoch, logs=None):
         """
