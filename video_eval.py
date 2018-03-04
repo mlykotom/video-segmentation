@@ -8,7 +8,7 @@ from tensorflow.python.client import device_lib
 import cityscapes_labels
 import config
 import utils
-from generator import data_generator
+from generator import gta_generator
 from models import MobileNetUnet
 
 print(device_lib.list_local_devices())
@@ -56,7 +56,7 @@ try:
         #     raise Exception("Image not found")
 
         frame = cv2.resize(frame, (target_size[1], target_size[0]))
-        norm = data_generator.GTAGenerator.default_normalize(frame, target_size)
+        norm = gta_generator.GTAGenerator.default_normalize(frame, target_size)
         prediction = model.k.predict(np.array([norm]), 1, verbose=1)
 
         class_scores = prediction.reshape((target_size[0], target_size[1], n_classes))

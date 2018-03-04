@@ -1,5 +1,7 @@
 import glob
 import itertools
+import os
+import random
 
 import cv2
 import numpy as np
@@ -9,8 +11,8 @@ from base_generator import BaseDataGenerator
 
 
 class CamVidGenerator(BaseDataGenerator):
-    def get_labels(self):
-        return [
+    _config = {
+        'labels': [
             [64, 128, 64],  # Animal
             [192, 0, 128],  # Archway
             [0, 128, 192],  # Bicyclist
@@ -43,28 +45,19 @@ class CamVidGenerator(BaseDataGenerator):
             [192, 192, 0],  # VegetationMisc
             [0, 0, 0],  # Void
             [64, 192, 0],  # Wall
-        ]
-        # return [[128, 0, 0],
-        #         [128, 128, 0],
-        #         [128, 128, 128],
-        #         [64, 0, 128],
-        #         [192, 128, 128],
-        #         [128, 64, 128],
-        #         [64, 64, 0],
-        #         [64, 64, 128],
-        #         [192, 192, 128],
-        #         [0, 0, 192],
-        #         [0, 128, 192]]
-
-    def get_n_classes(self):
-        return len(self.get_labels())
-
-    config = {
+        ],
         # 'weights_file': 'data/pretrained_dilation_camvid.pickle',
         # 'input_shape': (900, 1100, 3),
         # 'output_shape': (66, 91, 11),  # TODO what???
         'mean_pixel': (110.70, 108.77, 105.41),
     }
+
+    def get_config(self):
+
+        return {
+            'labels': self._config['labels'],
+            'n_classes': len(self._config['labels'])
+        }
 
     def __init__(self, dataset_path, debug_samples=0, validation_split=0.0):
         # validation split cant be full dataset and can't be out of range
@@ -78,6 +71,7 @@ class CamVidGenerator(BaseDataGenerator):
         # self._training_data = zip(training_img, training_lab)
         # self._validation_data = zip(validation_img, validation_lab)
         # self._test_data = # TODO
+        dataset_path = os.path.join(dataset_path, 'camvid/')
 
         super(CamVidGenerator, self).__init__(dataset_path, debug_samples)
 
@@ -85,46 +79,25 @@ class CamVidGenerator(BaseDataGenerator):
         img_path = os.path.join(self._dataset_path, '701_StillsRaw_full/', )
         lab_path = os.path.join(self._dataset_path, 'LabeledApproved_full/', )
 
-        # if which_set == 'test':
-        #     img_files = glob.glob(img_path + '0006R0_' + "*.png")
-        #     lab_files = glob.glob(lab_path + '0006R0_' + "*.png")
-        # if which_set == 'val':
-        #     img_files = glob.glob(img_path + '0001TP_' + "*.png")
-        #     lab_files = glob.glob(lab_path + '0001TP_' + "*.png")
-        # elif which_set == 'train':
-        #     img_files = glob.glob(img_path + '0016E5_' + "*.png") \
-        #                 + glob.glob(img_path + 'Seq05VD_' + "*.png") \
-        #                 + glob.glob(img_path + '0006R0_' + "*.png")
-        #
-        #     lab_files = glob.glob(lab_path + '0016E5_' + "*.png") \
-        #                 + glob.glob(lab_path + 'Seq05VD_' + "*.png") \
-        #                 + glob.glob(lab_path + '0006R0_' + "*.png")
-        # else:
-        #     img_files = []
-        #     lab_files = []
-        #
-        # assert len(img_files) == len(lab_files)
-        # img_files.sort()
-        # lab_files.sort()
+        filenames = []
+        if which_set == 'train':
+            filenames += self._make_pairs(img_path, lab_path, '0016E5_')
+            filenames += self._make_pairs(img_path, lab_path, 'Seq05VD_')
+            filenames += self._make_pairs(img_path, lab_path, '0006R0_')
+        elif which_set == 'val':
+            filenames += self._make_pairs(img_path, lab_path, '0001TP_')
 
-        img_files = glob.glob(img_path + '0016E5_' + "*.png")
-        img_files.sort()
-        lab_files = glob.glob(lab_path + '0016E5_' + "*.png")
-        lab_files.sort()
-        #  + glob.glob(img_path + 'Seq05VD_' + "*.png") \
-        # + glob.glob(img_path + '0006R0_' + "*.png")
-
-        # it = iter(img_files)
-        # what = itertools.izip(it, it)
-
-        pair_of_imgs = zip(img_files, img_files[1::1])
-
-        filenames = zip(pair_of_imgs, lab_files[1:])
-        # print(filenames)
-        # exit()
+        random.shuffle(filenames)
 
         print('CamVid: ' + which_set + ' ' + str(len(filenames)) + ' files')
         self._data[which_set] = filenames
+
+    def _make_pairs(self, img_path, lab_path, prefix):
+        img_files = glob.glob(img_path + prefix + "*.png")
+        img_files.sort()
+        lab_files = glob.glob(lab_path + prefix + "*.png")
+        lab_files.sort()
+        return zip(zip(img_files, img_files[1::1]), lab_files)
 
     def _load_img(self, img_path):
         img = cv2.imread(img_path)
@@ -135,33 +108,47 @@ class CamVidGenerator(BaseDataGenerator):
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
         while True:
-            X = []
+            input1_arr = []
+            input2_arr = []
+            flow_arr = []
             Y = []
 
             for _ in range(batch_size):
                 (img_old_path, img_new_path), label_path = next(zipped)
 
-                img = self._load_img(img_old_path)
-                img = cv2.resize(img, (target_size[1], target_size[0]))
-                # img = self.normalize(img, target_size)
+                img = cv2.resize(self._load_img(img_old_path), target_size[::-1])
+                img2 = cv2.resize(self._load_img(img_new_path), target_size[::-1])
+                flow = calc_optical_flow(img, img2, 'dis')
 
-                img2 = self._load_img(img_new_path)
-                img2 = cv2.resize(img2, (target_size[1], target_size[0]))
-                # img2 = self.normalize(img2, target_size)
-
-                X.append((img, img2))
+                input1_arr.append(self.normalize(img, target_size))
+                input2_arr.append(self.normalize(img2, target_size))
+                flow_arr.append(flow)
 
                 seg_tensor = cv2.imread(label_path)
                 seg_tensor = self.one_hot_encoding(seg_tensor, target_size)
                 Y.append(seg_tensor)
 
-            yield np.array(X), np.array(Y)
+                X = [np.asarray(input1_arr), np.asarray(input2_arr), np.asarray(flow_arr)]
+
+                yield X, Y
 
     def normalize(self, rgb, target_size):
-        return BaseDataGenerator.default_normalize(rgb, target_size)
+        # norm = np.zeros(target_size + (3,), np.float32)
+        # norm[:, :, 0] = cv2.equalizeHist(rgb[:, :, 0])
+        # norm[:, :, 1] = cv2.equalizeHist(rgb[:, :, 1])
+        # norm[:, :, 2] = cv2.equalizeHist(rgb[:, :, 2])
+
+        return rgb
+
+        # norm_image = np.zeros_like(rgb, dtype=np.float32)
+        # cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        # return norm_image
 
     def one_hot_encoding(self, label_img, target_size):
-        return BaseDataGenerator.default_one_hot_encoding(label_img, self.get_labels(), target_size)
+        return BaseDataGenerator.default_one_hot_encoding(label_img, self.labels, target_size)
+
+
+_disFlow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
 
 
 def calc_optical_flow(old, new, flow_type):
@@ -169,20 +156,17 @@ def calc_optical_flow(old, new, flow_type):
     new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 
     if flow_type == 'dis':
-        disFlow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
-        flow = disFlow.calc(old_gray, new_gray, None)
+        return _disFlow.calc(old_gray, new_gray, None)
     else:
-        flow = cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-
-    return flow
+        return cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
 
 
-def flow_to_bgr(flow, old):
+def flow_to_bgr(flow, target_size, new_img):
     mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-    hsv = np.zeros_like(old)
-    hsv[..., 1] = 255
+    hsv = np.zeros(target_size + (3,), dtype=np.uint8)
     hsv[..., 0] = ang * 180 / np.pi / 2
-    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    hsv[..., 1] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    hsv[..., 2] = 255
     bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     return bgr
 
@@ -228,7 +212,6 @@ def tf_warp(img, flow, H, W):
     grid = tf.concat([x, y], axis=1)
     #    print grid.shape
     flows = grid + flow
-    print flows.shape
     max_y = tf.cast(H - 1, tf.int32)
     max_x = tf.cast(W - 1, tf.int32)
     zero = tf.zeros([], dtype=tf.int32)
@@ -277,7 +260,9 @@ def tf_warp(img, flow, H, W):
     return out
 
 
-def calcWarp(img_old, flow_arr, size):
+def calcWarp(img_old, flow, size):
+    flow_arr = np.array([np.rollaxis(flow, -1, 0)])
+
     with tf.Session() as sess:
         a = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         flow_vec = tf.placeholder(tf.float32, shape=[None, 2, None, None])
@@ -292,6 +277,21 @@ def calcWarp(img_old, flow_arr, size):
         return winner
 
 
+def get_color_from_label(class_id_image):
+    colored_image = np.zeros((class_id_image.shape[0], class_id_image.shape[1], 3), np.uint8)
+    for i in range(0, datagen.n_classes):
+        colored_image[class_id_image[:, :] == i] = datagen.labels[i]
+    return colored_image
+
+
+def one_hot_to_bgr(label):
+    class_scores = label.reshape((target_size[0], target_size[1], datagen.n_classes))
+    class_image = np.argmax(class_scores, axis=2)
+    colored_class_image = get_color_from_label(class_image)
+    colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
+    return colored_class_image
+
+
 if __name__ == '__main__':
     if __package__ is None:
         import sys
@@ -302,51 +302,37 @@ if __name__ == '__main__':
         __package__ = ''
 
     import config
-    import os
 
-    dataset_path = config.data_path('camvid')
+    if os.environ['USER'] == 'mlykotom':
+        dataset_path = '/Users/mlykotom/'
+    else:
+        dataset_path = config.data_path()
+
     datagen = CamVidGenerator(dataset_path)
 
-    batch_size = 1
+    batch_size = 8
     target_size = (360, 480)
 
-
-    def get_color_from_label(class_id_image):
-        colored_image = np.zeros((class_id_image.shape[0], class_id_image.shape[1], 3), np.uint8)
-        for i in range(0, datagen.get_n_classes()):
-            colored_image[class_id_image[:, :] == i] = datagen.get_labels()[i]
-        return colored_image
-
-
-    def one_hot_to_bgr(label):
-        class_scores = label.reshape((target_size[0], target_size[1], datagen.get_n_classes()))
-        class_image = np.argmax(class_scores, axis=2)
-        colored_class_image = get_color_from_label(class_image)
-        colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
-        return colored_class_image
-
-
     for imgBatch, labelBatch in datagen.flow('train', batch_size, target_size):
-        img, img2 = imgBatch[0]
+        left_img = imgBatch[0][0]
+        right_img = imgBatch[1][0]
+        optical_flow = imgBatch[2][0]
         label = labelBatch[0]
-        print(img.shape, img2.shape, label.shape)
+
+        flow_bgr = flow_to_bgr(optical_flow, target_size, right_img)
+
+        print(len(imgBatch), imgBatch[0].shape)
+        print(left_img.dtype, left_img.shape, right_img.shape, label.shape)
+        # exit()
 
         colored_class_image = one_hot_to_bgr(label)
 
-        flan_flow = calc_optical_flow(img, img2, 'flan')
-        flan_bgr = flow_to_bgr(flan_flow, img)
-        cv2.imshow("flan", flan_bgr)
-
-        dis_flow = calc_optical_flow(img, img2, 'dis')
-        dis_bgr = flow_to_bgr(dis_flow, img)
-        cv2.imshow("dis_flow", dis_bgr)
-
-        flow = np.rollaxis(flan_flow, -1, 0)
-
-        winner = calcWarp(img, np.array([flow]), target_size)
+        winner = calcWarp(left_img, optical_flow, target_size)
         cv2.imshow("winner", winner)
 
-        cv2.imshow("old", img)
-        cv2.imshow("new", img2)
+        cv2.imshow("old", left_img)
+        cv2.imshow("new", right_img)
+        cv2.imshow("flo", flow_bgr)
         cv2.imshow("gt", colored_class_image)
-        cv2.waitKey()
+        cv2.imshow("diff", right_img - left_img)
+        cv2.waitKey(50)

@@ -101,6 +101,7 @@ class BaseModel:
         :return:
         """
         if to_file is None:
-            to_file = 'weights/%s_%s_(%d)_finished.h5' % (self.name, run_name, last_epoch)
+            to_file = '../../weights/' + ('debug/' if self.is_debug else '') + '%s_%s_(%d)_finished.h5' % (
+                self.name, run_name, last_epoch)
 
         self.k.save_weights(to_file)

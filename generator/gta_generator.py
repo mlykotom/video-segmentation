@@ -7,21 +7,23 @@ from base_generator import BaseDataGenerator
 
 
 class GTAGenerator(BaseDataGenerator):
-    def __init__(self, dataset_path, debug_samples=0):
-        super(GTAGenerator, self).__init__(dataset_path, debug_samples)
-
-    def get_labels(self):
+    def get_config(self):
         import cityscapes_labels
-        return [lab.color for lab in cityscapes_labels.labels]
+        labels = [lab.color for lab in cityscapes_labels.labels]
+        return {
+            'labels': labels,
+            'n_classes': len(labels)
+        }
 
-    def get_n_classes(self):
-        return len(self.get_labels())
+    def __init__(self, dataset_path, debug_samples=0):
+        dataset_path = os.path.join(dataset_path, 'gta/')
+        super(GTAGenerator, self).__init__(dataset_path, debug_samples)
 
     def normalize(self, rgb, target_size):
         return BaseDataGenerator.default_normalize(rgb, target_size)
 
     def one_hot_encoding(self, label_img, target_size):
-        return BaseDataGenerator.default_one_hot_encoding(label_img, self.get_labels(), target_size)
+        return BaseDataGenerator.default_one_hot_encoding(label_img, self.labels, target_size)
 
     def _fill_split(self, which_set):
         split = self._get_filenames(which_set)
@@ -65,7 +67,7 @@ if __name__ == '__main__':
     import config
     import utils
 
-    dataset_path = config.data_path('gta')
+    dataset_path = config.data_path()
     images_path = os.path.join(dataset_path, 'images/')
     labels_path = os.path.join(dataset_path, 'labels/')
 
@@ -83,7 +85,7 @@ if __name__ == '__main__':
         cv2.imshow("normalized", img[0])
 
         class_scores = label[0]
-        class_scores = class_scores.reshape((target_size[0], target_size[1], datagen.get_n_classes()))
+        class_scores = class_scores.reshape((target_size[0], target_size[1], datagen.n_classes))
         class_image = np.argmax(class_scores, axis=2)
 
         colored_class_image = utils.class_image_to_image(class_image, cityscapes_labels.trainId2label)

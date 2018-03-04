@@ -1,7 +1,6 @@
 import argparse
 from time import gmtime, strftime
 
-import cityscapes_labels
 import config
 from callbacks import *
 from trainer import Trainer
@@ -15,17 +14,14 @@ def train(dataset_path, model_name='mobile_unet', run_name='', is_debug=False, r
     target_size = 288, 480
     # target_size = (1052, 1914) # original
 
-    n_classes = len(cityscapes_labels.labels)
     batch_size = batch_size or 2
     epochs = 200
 
-    trainer = Trainer.from_impl(model_name, target_size, n_classes, batch_size, is_debug, n_gpu)
+    trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, is_debug)
     model = trainer.compile_model()
 
     if summaries:
         trainer.summaries()
-
-    trainer.prepare_data(dataset_path, target_size)
 
     # train model
     trainer.fit_model(
@@ -78,7 +74,10 @@ if __name__ == '__main__':
 
     args = parse_arguments()
 
-    dataset_path = config.data_path('gta')
+    if args.gpus > 1 and args.gid is not None:
+        raise Exception("Can't be multimodel and gpu specified")
+
+    dataset_path = config.data_path()
 
     print("---------------")
     print('dataset path', dataset_path)

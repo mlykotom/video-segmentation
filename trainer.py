@@ -1,4 +1,3 @@
-import atexit
 import json
 
 import keras.losses
@@ -7,43 +6,52 @@ from keras import optimizers
 from keras.callbacks import ModelCheckpoint
 
 import cityscapes_labels
+import config
 import metrics
 from callbacks import SaveLastTrainedEpochCallback, tensorboard
-from generator import data_generator
+from generator import *
 from models import *
 
 
 class Trainer:
     train_callbacks = []
 
-    @staticmethod
-    def from_impl(model_name, target_size, n_classes, batch_size=1, is_debug=False, n_gpu=1):
-        """
-        :param is_debug:
-        :param str model_name: one of ['segnet', 'mobile_unet']
-        :param tuple target_size: (height, width)
-        :param int n_classes:
-        :param int n_gpu:
-        :return Trainer:
-        """
+    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, is_debug=False):
+        self.is_debug = is_debug
+        self.n_gpu = n_gpu
+        self.batch_size = batch_size * n_gpu
+        print("-- Number of GPUs used %d" % self.n_gpu)
+        print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
+        # ------------- data generator
+        datagen = GTAGenerator(dataset_path, debug_samples=20 if self.is_debug else 0)
+        # datagen = CamVidGenerator(dataset_path, debug_samples=21 if self.is_debug else 0)
+
+        self.train_generator = datagen.flow('train', self.batch_size, target_size)
+        self.train_steps = datagen.steps_per_epoch('train', self.batch_size)
+        self.val_generator = datagen.flow('val', self.batch_size, target_size)
+        self.val_steps = datagen.steps_per_epoch('val', self.batch_size)
+
+        # -------------  pick the right model
         if model_name == 'segnet':
-            model = SegNet(target_size, n_classes, is_debug=is_debug)
+            model = SegNet(target_size, datagen.n_classes, is_debug=is_debug)
         elif model_name == 'app_mobnet':
-            model = MobileUNet(target_size, n_classes, is_debug=is_debug)
+            model = MobileNetUnet(target_size, datagen.n_classes, is_debug=is_debug)
         elif model_name == 'mobile_unet':
-            model = MobileNetUnet(target_size, n_classes, is_debug)
+            model = MobileUNet(target_size, datagen.n_classes, is_debug=is_debug)
         else:
-            raise NotImplemented('Model must be one of [' + ','.join(['segnet', 'mobnet', 'app_mobnet']) + ']')
+            raise NotImplemented('Unknown model type')
 
+        # -------------  set multi gpu model
+        self.model = model
+        self.cpu_model = None
         if n_gpu > 1:
+            self.cpu_model = model.k
             model.make_multi_gpu(n_gpu)
-
-        return Trainer(model, batch_size, n_gpu, is_debug)
 
     @staticmethod
     def get_save_checkpoint_name(model):
-        return './checkpoint/' + model.name + ('_d' if model.is_debug else '') + '_save_epoch.h5'
+        return './checkpoint/' + ('debug/' if model.is_debug else '') + model.name + '_save_epoch.h5'
 
     @staticmethod
     def get_gpus():
@@ -87,6 +95,7 @@ class Trainer:
 
     @staticmethod
     def termination_save(model):
+        # TODO not working with multi gpu
         """
         Saves last epoch model
         :param BaseModel model:
@@ -101,19 +110,6 @@ class Trainer:
     @staticmethod
     def get_run_path(model, run_name):
         return ('debug/' if model.is_debug else '') + model.name + '_' + run_name
-
-    def __init__(self, model, batch_size, n_gpu, is_debug=False):
-        """
-
-        :param BaseModel model:
-        """
-        self.model = model
-        self.is_debug = is_debug
-
-        self.n_gpu = n_gpu
-        self.batch_size = batch_size * n_gpu
-        print("-- Number of GPUs used %d" % self.n_gpu)
-        print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
     def summaries(self):
         self.model.summary()
@@ -164,7 +160,8 @@ class Trainer:
         self.train_callbacks.append(epoch_save)
 
         # register termination save
-        atexit.register(self.termination_save, self.model)
+        # TODO should be enabled?
+        # atexit.register(self.termination_save, self.model)
 
         restart_epoch = 0
         restart_run_name = None
@@ -196,9 +193,10 @@ class Trainer:
         self.train_callbacks.append(tb)
 
         # ------------- model checkpoint
-        # TODO will not work on PChradis or METACENTRUM!
-        filepath = "../../weights/" + self.get_run_path(self.model,
-                                                        run_name) + '.h5'  # + '_cat_acc-{categorical_accuracy:.2f}'
+        # TODO will not work on PChradis
+        filepath = "../../weights/" + self.get_run_path(self.model, run_name) + '.h5'
+        # + '_cat_acc-{categorical_accuracy:.2f}'
+
         checkpoint = ModelCheckpoint(
             filepath,
             monitor='val_loss',
@@ -208,23 +206,15 @@ class Trainer:
         )
         self.train_callbacks.append(checkpoint)
 
-    def prepare_data(self, dataset_path, target_size):
-        # ------------- data generator
-        datagen = data_generator.GTAGenerator(dataset_path,
-                                              debug_samples=20 if self.is_debug else 0)
-
-        # TODO find other way than this
-        self.train_generator = datagen.flow('train', self.batch_size, target_size)
-        self.train_steps = datagen.steps_per_epoch('train', self.batch_size)
-        self.val_generator = datagen.flow('val', self.batch_size, target_size)
-        self.val_steps = datagen.steps_per_epoch('val', self.batch_size)
-
     def fit_model(self, run_name='', epochs=100, restart_training=False):
         restart_epoch, restart_run_name = self.prepare_restarting(restart_training, run_name)
         if restart_run_name is not None:
             run_name = restart_run_name
 
         self.prepare_callbacks(self.batch_size, epochs, run_name)
+
+        if self.n_gpu > 1 and self.cpu_model is not None:
+            self.model.k.__setattr__('callback_model', self.cpu_model)
 
         self.model.k.fit_generator(
             generator=self.train_generator,
@@ -235,8 +225,7 @@ class Trainer:
             validation_data=self.val_generator,
             validation_steps=self.val_steps,
             callbacks=self.train_callbacks,
-            use_multiprocessing=True,
-            max_queue_size=100,
+            max_queue_size=20,
         )
 
 
@@ -249,5 +238,6 @@ if __name__ == '__main__':
     epochs = 200
     is_debug = False
     n_gpu = 1
+    dataset_path = config.data_path()
 
-    trainer = Trainer.from_impl(model_name, target_size, n_classes, batch_size, is_debug, n_gpu)
+    trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, is_debug)

@@ -2,7 +2,7 @@ import os
 
 import cityscapes_labels
 import config
-from generator.data_generator import GTAGenerator
+from generator.gta_generator import GTAGenerator
 
 if __name__ == '__main__':
     dataset_path = config.data_path('gta')

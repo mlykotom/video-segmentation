@@ -12,6 +12,8 @@ class BaseDataGenerator:
         self._data = {'train': [], 'val': [], 'test': []}
         self._dataset_path = dataset_path
 
+        print(dataset_path)
+
         self._fill_split('train')
         self._fill_split('val')
         self._fill_split('test')
@@ -29,12 +31,16 @@ class BaseDataGenerator:
               (len(self._data['train']), len(self._data['val']), len(self._data['test'])))
 
     @abstractmethod
-    def get_labels(self):
-        pass
+    def get_config(self):
+        return {'labels': None, 'n_classes': None}
 
-    @abstractmethod
-    def get_n_classes(self):
-        pass
+    @property
+    def n_classes(self):
+        return self.get_config()['n_classes']
+
+    @property
+    def labels(self):
+        return self.get_config()['labels']
 
     @abstractmethod
     def _fill_split(self, which_set):
@@ -51,25 +57,23 @@ class BaseDataGenerator:
         :param target_size: (height, width)
         :return:
         """
-        rgb = cv2.resize(rgb, (target_size[1], target_size[0]))
-        norm = np.zeros((rgb.shape[0], rgb.shape[1], 3), np.float32)
+        tmp = cv2.resize(rgb, target_size[::-1])
 
-        b = rgb[:, :, 0]
-        g = rgb[:, :, 1]
-        r = rgb[:, :, 2]
+        norm = np.zeros(target_size + (3,), np.float32)
+        norm[:, :, 0] = cv2.equalizeHist(tmp[:, :, 0])
+        norm[:, :, 1] = cv2.equalizeHist(tmp[:, :, 1])
+        norm[:, :, 2] = cv2.equalizeHist(tmp[:, :, 2])
 
-        norm[:, :, 0] = cv2.equalizeHist(b)
-        norm[:, :, 1] = cv2.equalizeHist(g)
-        norm[:, :, 2] = cv2.equalizeHist(r)
+        # TODO
+        # norm_image = np.zeros_like(image, dtype=np.float32)
+        # cv2.normalize(image, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
-        norm = norm / 255.0
-
-        return norm
+        return norm / 255.0
 
     @staticmethod
     def default_one_hot_encoding(label_img, labels_colors, target_size):
         label_img = cv2.cvtColor(label_img, cv2.COLOR_BGR2RGB)
-        label_img = cv2.resize(label_img, (target_size[1], target_size[0]))
+        label_img = cv2.resize(label_img, target_size[::-1])
 
         label_list = []
         # TODO use labels as array with colors
@@ -83,7 +87,7 @@ class BaseDataGenerator:
             # label_current = cv2.morphologyEx(label_current, cv2.MORPH_GRADIENT, kernel)
 
             # TODO resize here? because if resizing first, it gets bad boundaries or tiny objects
-            # label_current = cv2.resize(label_current, (target_size[1], target_size[0]))
+            # label_current = cv2.resize(label_current, target_size[::-1])
 
             label_list.append(label_current)
 

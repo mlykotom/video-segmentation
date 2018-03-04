@@ -147,9 +147,20 @@ class MobileUNet(BaseModel):
         return Activation(mobilenet.relu6, name='conv_pw_%d_relu' % block_id)(x)
 
     def _create_model(self):
-        img_input = Input(shape=(self.target_size[0], self.target_size[1], 3))
+        input_shape = self.target_size + (3,)
+        # input = Input(shape=input_shape)
 
-        b00 = self._conv_block(img_input, 32, self.alpha, strides=(2, 2), block_id=0)
+        img_old = Input(shape=input_shape, name='data_0')
+        img_new = Input(shape=input_shape, name='data_1')
+        flo = Input(shape=self.target_size + (2,), name='flow')
+
+        all_inputs = [img_old, img_new, flo]
+        input = concatenate([img_old, img_new, flo])
+
+        # all_inputs = img_old
+        # input = img_old
+
+        b00 = self._conv_block(input, 32, self.alpha, strides=(2, 2), block_id=0)
         b01 = self._depthwise_conv_block(b00, 64, self.alpha, self.depth_multiplier, block_id=1)
 
         b02 = self._depthwise_conv_block(b01, 128, self.alpha, self.depth_multiplier, block_id=2, strides=(2, 2))
@@ -209,10 +220,17 @@ class MobileUNet(BaseModel):
         x = Reshape((-1, self.n_classes))(x)
         x = Activation('softmax')(x)
 
-        return Model(img_input, x)
+        return Model(all_inputs, x)
 
     custom_objects = {
         'relu6': mobilenet.relu6,
         'DepthwiseConv2D': mobilenet.DepthwiseConv2D,
         'BilinearUpSampling2D': BilinearUpSampling2D,
     }
+
+
+if __name__ == '__main__':
+    target_size = (288, 480, 3)
+
+    model = MobileUNet(target_size, 20)
+    print(model.summary())

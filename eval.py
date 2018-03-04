@@ -7,7 +7,7 @@ from keras import losses, optimizers
 import cityscapes_labels
 import config
 import metrics
-from generator.data_generator import GTAGenerator
+from generator.gta_generator import GTAGenerator
 from models import MobileUNet
 
 batch_size = 1
