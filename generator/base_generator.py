@@ -10,7 +10,7 @@ class BaseDataGenerator:
 
     def __init__(self, dataset_path, debug_samples=0):
         self._data = {'train': [], 'val': [], 'test': []}
-        self._dataset_path = dataset_path
+        self.dataset_path = dataset_path
 
         print(dataset_path)
 

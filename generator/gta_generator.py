@@ -29,8 +29,8 @@ class GTAGenerator(BaseDataGenerator):
         split = self._get_filenames(which_set)
 
         for img_id in split:
-            img_path = os.path.join(self._dataset_path, 'images/', img_id)
-            lab_path = os.path.join(self._dataset_path, 'labels/', img_id)
+            img_path = os.path.join(self.dataset_path, 'images/', img_id)
+            lab_path = os.path.join(self.dataset_path, 'labels/', img_id)
             self._data[which_set].append((img_path, lab_path))
 
     def _get_filenames(self, which_set):

@@ -76,8 +76,8 @@ class CamVidGenerator(BaseDataGenerator):
         super(CamVidGenerator, self).__init__(dataset_path, debug_samples)
 
     def _fill_split(self, which_set):
-        img_path = os.path.join(self._dataset_path, '701_StillsRaw_full/', )
-        lab_path = os.path.join(self._dataset_path, 'LabeledApproved_full/', )
+        img_path = os.path.join(self.dataset_path, '701_StillsRaw_full/', )
+        lab_path = os.path.join(self.dataset_path, 'LabeledApproved_full/', )
 
         filenames = []
         if which_set == 'train':
@@ -119,10 +119,11 @@ class CamVidGenerator(BaseDataGenerator):
                 img = cv2.resize(self._load_img(img_old_path), target_size[::-1])
                 img2 = cv2.resize(self._load_img(img_new_path), target_size[::-1])
                 flow = calc_optical_flow(img, img2, 'dis')
+                flow_arr = np.rollaxis(flow, -1, 0)
 
                 input1_arr.append(self.normalize(img, target_size))
                 input2_arr.append(self.normalize(img2, target_size))
-                flow_arr.append(flow)
+                flow_arr.append(flow_arr)
 
                 seg_tensor = cv2.imread(label_path)
                 seg_tensor = self.one_hot_encoding(seg_tensor, target_size)
@@ -138,11 +139,9 @@ class CamVidGenerator(BaseDataGenerator):
         # norm[:, :, 1] = cv2.equalizeHist(rgb[:, :, 1])
         # norm[:, :, 2] = cv2.equalizeHist(rgb[:, :, 2])
 
-        return rgb
-
-        # norm_image = np.zeros_like(rgb, dtype=np.float32)
-        # cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-        # return norm_image
+        norm_image = np.zeros_like(rgb, dtype=np.float32)
+        cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        return norm_image
 
     def one_hot_encoding(self, label_img, target_size):
         return BaseDataGenerator.default_one_hot_encoding(label_img, self.labels, target_size)
@@ -272,8 +271,8 @@ def calcWarp(img_old, flow, size):
         warp_graph = tf_warp(a, flow_arr, size[0], size[1])
 
         out = sess.run(warp_graph, feed_dict={a: np.array([img_old]), flow_vec: flow_arr})
-        out = np.clip(out, 0, 255).astype('uint8')
-        winner = out[0].astype('uint8')
+        out = np.clip(out, 0, 1)
+        winner = out[0]
         return winner
 
 
