@@ -1,5 +1,5 @@
-from keras import models
-from keras.engine import Layer
+import keras
+from keras import Input, Model
 from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape
 
 from base_model import BaseModel
@@ -8,58 +8,104 @@ from base_model import BaseModel
 class SegNet(BaseModel):
 
     def _create_model(self):
-        model = models.Sequential()
-        model.add(Layer(input_shape=(self.target_size[0], self.target_size[1], 3)))
+        # model = models.Sequential()
+        # model.add(Layer(input_shape=(self.target_size[0], self.target_size[1], 3)))
 
         filter_size = 64
         pool_size = (2, 2)
         kernel_size = (3, 3)
 
-        # encoder
-        model.add(Convolution2D(filter_size, kernel_size, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=pool_size))
+        input = Input(shape=self.target_size + (3,), name='data_0')
 
-        model.add(Convolution2D(128, kernel_size, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=pool_size))
+        out = Convolution2D(filter_size, kernel_size, padding='same')(input)
+        out = BatchNormalization()(out)
+        out = Activation('relu')(out)
+        out = MaxPooling2D(pool_size=pool_size)(out)
 
-        model.add(Convolution2D(256, kernel_size, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
-        model.add(MaxPooling2D(pool_size=pool_size))
+        out = Convolution2D(128, kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
+        out = Activation('relu')(out)
+        out = MaxPooling2D(pool_size=pool_size)(out)
 
-        model.add(Convolution2D(512, kernel_size, padding='same'))
-        model.add(BatchNormalization())
-        model.add(Activation('relu'))
+        out = Convolution2D(256, kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
+        out = Activation('relu')(out)
+        out = MaxPooling2D(pool_size=pool_size)(out)
+
+        out = Convolution2D(512, kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
+        out = Activation('relu')(out)
 
         # decoder
-        model.add(Convolution2D(512, kernel_size, padding='same'))
-        model.add(BatchNormalization())
+        out = Convolution2D(512, kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
 
-        model.add(UpSampling2D(size=pool_size))
-        model.add(Convolution2D(256, kernel_size, padding='same'))
-        model.add(BatchNormalization())
+        out = UpSampling2D(size=pool_size)(out)
+        out = Convolution2D(256, kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
 
-        model.add(UpSampling2D(size=pool_size))
-        model.add(Convolution2D(128, kernel_size, padding='same'))
-        model.add(BatchNormalization())
+        out = UpSampling2D(size=pool_size)(out)
+        out = Convolution2D(128, kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
 
-        model.add(UpSampling2D(size=pool_size))
-        model.add(Convolution2D(filter_size, kernel_size, padding='same'))
-        model.add(BatchNormalization())
+        out = UpSampling2D(size=pool_size)(out)
+        out = Convolution2D(filter_size, kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
 
-        model.add(Convolution2D(self.n_classes, (1, 1), padding='same'))
+        out = Convolution2D(self.n_classes, (1, 1), padding='same')(out)
 
-        model.add(Reshape((-1, self.n_classes)))
-        model.add(Activation('softmax'))
+        out = Reshape((-1, self.n_classes))(out)
+        out = Activation('softmax')(out)
+
+        # encoder
+        # model.add(Convolution2D(filter_size, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        # model.add(Activation('relu'))
+        # model.add(MaxPooling2D(pool_size=pool_size))
+        #
+        # model.add(Convolution2D(128, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        # model.add(Activation('relu'))
+        # model.add(MaxPooling2D(pool_size=pool_size))
+        #
+        # model.add(Convolution2D(256, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        # model.add(Activation('relu'))
+        # model.add(MaxPooling2D(pool_size=pool_size))
+        #
+        # model.add(Convolution2D(512, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        # model.add(Activation('relu'))
+        #
+        # # decoder
+        # model.add(Convolution2D(512, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        #
+        # model.add(UpSampling2D(size=pool_size))
+        # model.add(Convolution2D(256, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        #
+        # model.add(UpSampling2D(size=pool_size))
+        # model.add(Convolution2D(128, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        #
+        # model.add(UpSampling2D(size=pool_size))
+        # model.add(Convolution2D(filter_size, kernel_size, padding='same'))
+        # model.add(BatchNormalization())
+        #
+        # model.add(Convolution2D(self.n_classes, (1, 1), padding='same'))
+        #
+        # model.add(Reshape((-1, self.n_classes)))
+        # model.add(Activation('softmax'))
+
+        model = Model(input, out)
 
         return model
 
 
 if __name__ == '__main__':
-    model = SegNet((360, 480), 30)
+    target_size = (288, 480)
+    model = SegNet(target_size, 30)
 
-    model.summary()
+    print(model.summary())
+    keras.utils.plot_model(model.k, 'segnet.png', show_shapes=True, show_layer_names=True)

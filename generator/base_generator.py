@@ -167,3 +167,23 @@ class BaseDataGenerator:
         :return:
         """
         return int(np.ceil(len(self._data[type]) / float(batch_size * gpu_count)))
+
+    def _load_img(self, img_path):
+        img = cv2.imread(img_path)
+        if img is None:
+            raise ValueError("Image %s was not found!" % img_path)
+        return img
+
+
+def get_color_from_label(class_id_image, n_classes, labels):
+    colored_image = np.zeros((class_id_image.shape[0], class_id_image.shape[1], 3), np.uint8)
+    for i in range(0, n_classes):
+        colored_image[class_id_image[:, :] == i] = labels[i]
+    return colored_image
+
+def one_hot_to_bgr(label, target_size, n_classes, labels):
+    class_scores = label.reshape(target_size + (n_classes,))
+    class_image = np.argmax(class_scores, axis=2)
+    colored_class_image = get_color_from_label(class_image, n_classes, labels)
+    colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
+    return colored_class_image

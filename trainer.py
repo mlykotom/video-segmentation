@@ -24,8 +24,9 @@ class Trainer:
         print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
         # ------------- data generator
-        datagen = GTAGenerator(dataset_path, debug_samples=20 if self.is_debug else 0)
+        # datagen = GTAGenerator(dataset_path, debug_samples=20 if self.is_debug else 0)
         # datagen = CamVidGenerator(dataset_path, debug_samples=21 if self.is_debug else 0)
+        datagen = CamVidFlowGenerator(dataset_path, debug_samples=21 if self.is_debug else 0)
 
         self.train_generator = datagen.flow('train', self.batch_size, target_size)
         self.train_steps = datagen.steps_per_epoch('train', self.batch_size)
@@ -33,14 +34,17 @@ class Trainer:
         self.val_steps = datagen.steps_per_epoch('val', self.batch_size)
 
         # -------------  pick the right model
-        if model_name == 'segnet':
-            model = SegNet(target_size, datagen.n_classes, is_debug=is_debug)
-        elif model_name == 'app_mobnet':
-            model = MobileNetUnet(target_size, datagen.n_classes, is_debug=is_debug)
-        elif model_name == 'mobile_unet':
-            model = MobileUNet(target_size, datagen.n_classes, is_debug=is_debug)
-        else:
-            raise NotImplemented('Unknown model type')
+        # if model_name == 'segnet':
+        #     model = SegNet(target_size, datagen.n_classes, is_debug=is_debug)
+        # elif model_name == 'app_mobnet':
+        #     model = MobileNetUnet(target_size, datagen.n_classes, is_debug=is_debug)
+        # elif model_name == 'mobile_unet':
+        #     model = MobileUNet(target_size, datagen.n_classes, is_debug=is_debug)
+        # else:
+        #     raise NotImplemented('Unknown model type')
+
+        # model = SegNet(target_size, datagen.n_classes, is_debug)
+        model = SegNetWarp(target_size, datagen.n_classes, is_debug=is_debug)
 
         # -------------  set multi gpu model
         self.model = model
@@ -116,28 +120,28 @@ class Trainer:
         self.model.plot_model()
 
     def compile_model(self):
-        # if is_debug:
-        #     model.k.compile(
-        #         optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
-        #         loss=keras.losses.categorical_crossentropy,
-        #         metrics=[
-        #             dice_coef,
-        #             precision,
-        #             keras.metrics.categorical_accuracy
-        #         ],
-        #     )
-        # else:
-
-        self.model.k.compile(
-            loss=keras.losses.categorical_crossentropy,
-            optimizer=optimizers.Adam(),
-            metrics=[
-                metrics.dice_coef,
-                metrics.precision,
-                keras.metrics.categorical_accuracy,
-                metrics.mean_iou
-            ]
-        )
+        if self.is_debug:
+            self.model.k.compile(
+                loss=keras.losses.categorical_crossentropy,
+                optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
+                metrics=[
+                    metrics.dice_coef,
+                    metrics.precision,
+                    keras.metrics.categorical_accuracy,
+                    metrics.mean_iou
+                ],
+            )
+        else:
+            self.model.k.compile(
+                loss=keras.losses.categorical_crossentropy,
+                optimizer=optimizers.Adam(),
+                metrics=[
+                    metrics.dice_coef,
+                    metrics.precision,
+                    keras.metrics.categorical_accuracy,
+                    metrics.mean_iou
+                ]
+            )
 
         return self.model
 
@@ -181,7 +185,7 @@ class Trainer:
 
         return restart_epoch, restart_run_name
 
-    def prepare_callbacks(self, batch_size, epochs, run_name):
+    def prepare_callbacks(self, run_name):
         # ------------- lr scheduler
         # lr_base = 0.01 * (float(batch_size) / 16)
         # lr_power = 0.9
@@ -211,9 +215,10 @@ class Trainer:
         if restart_run_name is not None:
             run_name = restart_run_name
 
-        self.prepare_callbacks(self.batch_size, epochs, run_name)
+        self.prepare_callbacks(run_name)
 
         if self.n_gpu > 1 and self.cpu_model is not None:
+            # WARNING: multi gpu model not working on version keras 2.1.4, this is workaround
             self.model.k.__setattr__('callback_model', self.cpu_model)
 
         self.model.k.fit_generator(
@@ -226,6 +231,7 @@ class Trainer:
             validation_steps=self.val_steps,
             callbacks=self.train_callbacks,
             max_queue_size=20,
+            use_multiprocessing=True
         )
 
 
