@@ -1,8 +1,9 @@
+import keras
 import keras.backend as K
 from keras import Input
 from keras.applications import mobilenet
 from keras.applications.mobilenet import DepthwiseConv2D
-from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape
+from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Dropout
 from keras.models import Model
 
 from base_model import BaseModel
@@ -147,18 +148,14 @@ class MobileUNet(BaseModel):
         return Activation(mobilenet.relu6, name='conv_pw_%d_relu' % block_id)(x)
 
     def _create_model(self):
-        input_shape = self.target_size + (3,)
-        # input = Input(shape=input_shape)
+        # img_input = Input(shape=(self.target_size[0], self.target_size[1], 3))
 
-        img_old = Input(shape=input_shape, name='data_0')
-        img_new = Input(shape=input_shape, name='data_1')
+        img_old = Input(shape=self.target_size + (3,), name='data_0')
+        img_new = Input(shape=self.target_size + (3,), name='data_1')
         flo = Input(shape=self.target_size + (2,), name='flow')
 
         all_inputs = [img_old, img_new, flo]
-        input = concatenate([img_old, img_new, flo])
-
-        # all_inputs = img_old
-        # input = img_old
+        input = concatenate(all_inputs)
 
         b00 = self._conv_block(input, 32, self.alpha, strides=(2, 2), block_id=0)
         b01 = self._depthwise_conv_block(b00, 64, self.alpha, self.depth_multiplier, block_id=1)
@@ -178,8 +175,8 @@ class MobileUNet(BaseModel):
 
         b12 = self._depthwise_conv_block(b11, 1024, self.alpha, self.depth_multiplier, block_id=12, strides=(2, 2))
         b13 = self._depthwise_conv_block(b12, 1024, self.alpha, self.depth_multiplier, block_id=13)
-        # if not self.is_debug:
-        #     b13 = Dropout(self.dropout)(b13)
+        if not self.is_debug:
+            b13 = Dropout(self.dropout)(b13)
 
         filters = int(512 * self.alpha)
         up1 = concatenate([
@@ -230,7 +227,8 @@ class MobileUNet(BaseModel):
 
 
 if __name__ == '__main__':
-    target_size = (288, 480, 3)
+    target_size = 288, 480
 
-    model = MobileUNet(target_size, 20)
+    model = MobileUNet(target_size, 32)
     print(model.summary())
+    keras.utils.plot_model(model.k, 'mobilenet_unet.png', show_shapes=True, show_layer_names=True)

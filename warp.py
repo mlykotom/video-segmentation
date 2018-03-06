@@ -101,7 +101,6 @@ def tf_warp(img, flow, H, W):
     grid = tf.concat([x, y], axis=1)
     #    print grid.shape
     flows = grid + flow
-    print flows.shape
     max_y = tf.cast(H - 1, tf.int32)
     max_x = tf.cast(W - 1, tf.int32)
     zero = tf.zeros([], dtype=tf.int32)
@@ -198,11 +197,30 @@ if __name__ == "__main__":
 
     print("i shape", imgs[0].shape)
     arrs = [
-        np.array([imgs[0]], dtype=np.float32),
-        np.array([imgs[1]], dtype=np.float32),
+        np.array([imgs[0] / 255.0]),
+        np.array([imgs[1] / 255.0]),
     ]
 
+    print("normal", flow_normal_axis.shape)
+    print("xxx", flow_arr.shape)
+    # exit()
+
     with tf.Session() as sess:
+        # a = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+        # flow_vec = tf.placeholder(tf.float32, shape=[None, None, None, 2])
+        #
+        # init = tf.global_variables_initializer()
+        # sess.run(init)
+        # warp_graph = resampler(a, flow_vec)
+        #
+        # out = sess.run(warp_graph, feed_dict={a: arrs[0], flow_vec: np.array([flow_normal_axis])})
+        # out = np.clip(out, 0, 1)
+        #
+        # cv2.imshow("left", arrs[0][0])
+        # cv2.imshow("right", arrs[1][0])
+        # cv2.imshow("winner", out[0])
+        # cv2.waitKey()
+
         a = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         flow_vec = tf.placeholder(tf.float32, shape=[None, 2, None, None])
         init = tf.global_variables_initializer()
@@ -210,8 +228,8 @@ if __name__ == "__main__":
         warp_graph = tf_warp(a, flow_arr, size[1], size[0])
 
         out = sess.run(warp_graph, feed_dict={a: arrs[0], flow_vec: flow_arr})
-        out = np.clip(out, 0, 255).astype('uint8')
-        winner = out[0].astype('uint8')
+        out = np.clip(out, 0, 1)
+        winner = out[0]
 
         cv2.imshow("winner", winner)
         cv2.imshow("new", imgs[1])
