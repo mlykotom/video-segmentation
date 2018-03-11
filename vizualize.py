@@ -5,7 +5,6 @@ from keras import optimizers
 import config
 import metrics
 from generator import CamVidFlowGenerator
-from generator.base_generator import one_hot_to_bgr
 from models import SegNetWarp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,7 +38,7 @@ if __name__ == '__main__':
         gt = gtBatch[0]
         print(img.shape, gt.shape)
 
-        colored_class_image = one_hot_to_bgr(gt, target_size, datagen.n_classes, datagen.labels)
+        colored_class_image = datagen.one_hot_to_bgr(gt, target_size, datagen.n_classes, datagen.labels)
 
         # prediction = model.k.predict(np.array([norm]), batch_size, verbose=1)
 

@@ -1,7 +1,18 @@
 from abc import ABCMeta, abstractmethod
 
 import keras.utils
+from keras import optimizers
 from keras.utils import multi_gpu_model
+
+if __package__ is None:
+    import sys
+    from os import path
+
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+else:
+    __package__ = ''
+
+import metrics
 
 
 class BaseModel:
@@ -105,3 +116,28 @@ class BaseModel:
                 self.name, run_name, last_epoch)
 
         self.k.save_weights(to_file)
+
+    def compile(self):
+        m_loss = keras.losses.categorical_crossentropy,
+
+        m_metrics = [
+            metrics.dice_coef,
+            metrics.precision,
+            keras.metrics.categorical_accuracy,
+            metrics.mean_iou
+        ]
+
+        if self.is_debug:
+            self._model.compile(
+                loss=m_loss,
+                optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
+                metrics=m_metrics
+            )
+        else:
+            self._model.compile(
+                loss=m_loss,
+                optimizer=optimizers.Adam(),
+                metrics=m_metrics
+            )
+
+        return self._model

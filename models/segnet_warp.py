@@ -1,7 +1,7 @@
 import keras
 from keras import Input, Model
 from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, \
-    concatenate, Lambda
+    Add, Lambda
 
 from base_model import BaseModel
 from layers import tf_warp
@@ -36,14 +36,15 @@ class SegNetWarp(BaseModel):
             out = tf_warp(img, flow, out_size)
             return out
 
-        warped = Lambda(warp_test, name="warp")([img_old, flo])
-        left_branch = self.first_block(warped, filter_size, kernel_size, pool_size)
-        # left_branch = warped
-
+        left_branch = self.first_block(img_old, filter_size, kernel_size, pool_size)
         right_branch = self.first_block(img_new, filter_size, kernel_size, pool_size)
 
+        flo_down = MaxPooling2D(pool_size=pool_size)(flo)
+
+        warped = Lambda(warp_test, name="warp")([left_branch, flo_down])
+
         # encoder
-        out = concatenate([left_branch, right_branch])
+        out = Add()([warped, right_branch])
 
         out = Convolution2D(128, kernel_size, padding='same')(out)
         out = BatchNormalization()(out)

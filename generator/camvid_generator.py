@@ -3,9 +3,18 @@ import os
 import random
 
 import cv2
-import numpy as np
 
-from base_generator import BaseDataGenerator, one_hot_to_bgr
+if __package__ is None:
+    import sys
+    from os import path
+
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+else:
+    __package__ = ''
+
+import config
+
+from base_generator import BaseDataGenerator
 
 
 class CamVidGenerator(BaseDataGenerator):
@@ -50,16 +59,15 @@ class CamVidGenerator(BaseDataGenerator):
         'mean_pixel': (110.70, 108.77, 105.41),
     }
 
-    def get_config(self):
+    @property
+    def config(self):
         return {
             'labels': self._config['labels'],
             'n_classes': len(self._config['labels'])
         }
 
     def __init__(self, dataset_path, debug_samples=0):
-        self._disFlow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
         dataset_path = os.path.join(dataset_path, 'camvid/')
-
         super(CamVidGenerator, self).__init__(dataset_path, debug_samples)
 
     def _fill_split(self, which_set):
@@ -86,28 +94,8 @@ class CamVidGenerator(BaseDataGenerator):
         lab_files.sort()
         return zip(img_files, lab_files)
 
-    def one_hot_encoding(self, label_img, target_size):
-        return BaseDataGenerator.default_one_hot_encoding(label_img, self.labels, target_size)
-
-    def normalize(self, rgb, target_size):
-        rgb = cv2.resize(rgb, target_size[::-1])
-
-        norm_image = np.zeros_like(rgb, dtype=np.float32)
-        cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-        return norm_image
-
 
 if __name__ == '__main__':
-    if __package__ is None:
-        import sys
-        from os import path
-
-        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-    else:
-        __package__ = ''
-
-    import config
-
     if os.environ['USER'] == 'mlykotom':
         dataset_path = '/Users/mlykotom/'
     else:
@@ -124,7 +112,7 @@ if __name__ == '__main__':
         img = imgBatch[0]
         label = labelBatch[0]
 
-        colored_class_image = one_hot_to_bgr(label, target_size, datagen.n_classes, datagen.labels)
+        colored_class_image = datagen.one_hot_to_bgr(label, target_size, datagen.n_classes, datagen.labels)
 
         cv2.imshow("img", img)
         cv2.imshow("gt", colored_class_image)

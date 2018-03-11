@@ -88,11 +88,11 @@ labels = [
     Label('caravan',                29, 28, 'vehicle', 7, True, True, (0, 0, 90)),
     Label('trailer',                30, 29, 'vehicle', 7, True, True, (0, 0, 110)),
 
-    # Label('ego vehicle',            1, 255, 'void', 0, False, True, (0, 0, 0)),
-    # Label('rectification border',   2, 255, 'void', 0, False, True, (0, 0, 0)),
-    # Label('out of roi',             3, 255, 'void', 0, False, True, (0, 0, 0)),
-    # Label('static',                 4, 255, 'void', 0, False, True, (0, 0, 0)),
-    # Label('license plate',          -1, -1, 'vehicle', 7, False, True, (0, 0, 142)),
+    Label('ego vehicle',            1, 255, 'void', 0, False, True, (0, 0, 0)),
+    Label('rectification border',   2, 255, 'void', 0, False, True, (0, 0, 0)),
+    Label('out of roi',             3, 255, 'void', 0, False, True, (0, 0, 0)),
+    Label('static',                 4, 255, 'void', 0, False, True, (0, 0, 0)),
+    Label('license plate',          -1, -1, 'vehicle', 7, False, True, (0, 0, 142)),
 ]
 
 

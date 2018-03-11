@@ -6,7 +6,7 @@ from callbacks import *
 from trainer import Trainer
 
 
-def train(dataset_path, model_name='mobile_unet', run_name='', is_debug=False, restart_training=False,
+def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, restart_training=False,
           batch_size=None, n_gpu=1, summaries=False):
     # TODO make smaller
     # target_size = 360, 648
@@ -17,8 +17,8 @@ def train(dataset_path, model_name='mobile_unet', run_name='', is_debug=False, r
     batch_size = batch_size or 2
     epochs = 200
 
-    trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, is_debug)
-    model = trainer.compile_model()
+    trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples)
+    model = trainer.model.compile()
 
     if summaries:
         trainer.summaries()
@@ -43,9 +43,8 @@ if __name__ == '__main__':
                             default=False)
 
         parser.add_argument('-d', '--debug',
-                            action='store_true',
-                            help='Just debug training (few images from dataset)',
-                            default=False)
+                            help='Just debug training (number to pick from dataset)',
+                            default=0)
 
         parser.add_argument('--summaries',
                             action='store_true',
@@ -75,7 +74,7 @@ if __name__ == '__main__':
     args = parse_arguments()
 
     if args.gpus > 1 and args.gid is not None:
-        raise Exception("Can't be multimodel and gpu specified")
+        raise Exception("Can't be multi model and gpu specified")
 
     dataset_path = config.data_path()
 
@@ -86,7 +85,7 @@ if __name__ == '__main__':
     print("---------------")
     print('model', args.model)
     print("---------------")
-    print("is debug", args.debug)
+    print("debug samples", args.debug)
     print("restart training", args.restart)
     print("---------------")
     print("batch size", args.batch)
@@ -99,7 +98,7 @@ if __name__ == '__main__':
 
     try:
         train(dataset_path, args.model, run_name,
-              is_debug=args.debug,
+              debug_samples=int(args.debug),
               restart_training=args.restart,
               batch_size=int(args.batch),
               n_gpu=int(args.gpus),

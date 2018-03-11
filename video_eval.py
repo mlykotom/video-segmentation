@@ -21,10 +21,7 @@ target_size = 288, 480
 labels = cityscapes_labels.labels
 n_classes = len(labels)
 
-dataset_path = config.data_path('gta')
-images_path = os.path.join(dataset_path, 'images/')
-labels_path = os.path.join(dataset_path, 'labels/')
-
+datagen = gta_generator.GTAGenerator(config.data_path())
 model = MobileNetUnet((target_size[0], target_size[1]), n_classes)
 
 weights = '/home/mlyko/weights/MobileNetUnet_2018_02_20_08:33_cat_acc-0.89.hdf5'
@@ -44,7 +41,7 @@ try:
         ret, frame = vid.read()
         if not ret:
             vid.release()
-            print "Released Video Resource"
+            print("Released Video Resource")
             break
 
         if i < 200:
@@ -56,7 +53,7 @@ try:
         #     raise Exception("Image not found")
 
         frame = cv2.resize(frame, (target_size[1], target_size[0]))
-        norm = gta_generator.GTAGenerator.default_normalize(frame, target_size)
+        norm = datagen.normalize(frame, target_size)
         prediction = model.k.predict(np.array([norm]), 1, verbose=1)
 
         class_scores = prediction.reshape((target_size[0], target_size[1], n_classes))

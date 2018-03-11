@@ -1,13 +1,13 @@
 import os
 
 import cv2
-import numpy as np
 
 from base_generator import BaseDataGenerator
 
 
 class GTAGenerator(BaseDataGenerator):
-    def get_config(self):
+    @property
+    def config(self):
         import cityscapes_labels
         labels = [lab.color for lab in cityscapes_labels.labels]
         return {
@@ -18,12 +18,6 @@ class GTAGenerator(BaseDataGenerator):
     def __init__(self, dataset_path, debug_samples=0):
         dataset_path = os.path.join(dataset_path, 'gta/')
         super(GTAGenerator, self).__init__(dataset_path, debug_samples)
-
-    def normalize(self, rgb, target_size):
-        return BaseDataGenerator.default_normalize(rgb, target_size)
-
-    def one_hot_encoding(self, label_img, target_size):
-        return BaseDataGenerator.default_one_hot_encoding(label_img, self.labels, target_size)
 
     def _fill_split(self, which_set):
         split = self._get_filenames(which_set)
@@ -39,7 +33,7 @@ class GTAGenerator(BaseDataGenerator):
         import scipy.io
 
         filenames = []
-        split = scipy.io.loadmat(os.path.join('./gta_read_mapping', 'split.mat'))
+        split = scipy.io.loadmat(os.path.join('./generator/gta_read_mapping', 'split.mat'))
         split = split[which_set + "Ids"]
 
         # To remove (Files with different size in img and mask)
@@ -65,13 +59,8 @@ if __name__ == '__main__':
 
     import cityscapes_labels
     import config
-    import utils
 
-    dataset_path = config.data_path()
-    images_path = os.path.join(dataset_path, 'images/')
-    labels_path = os.path.join(dataset_path, 'labels/')
-
-    datagen = GTAGenerator(dataset_path=dataset_path)
+    datagen = GTAGenerator(dataset_path=config.data_path())
 
     batch_size = 1
     target_size = (360, 648)
@@ -82,16 +71,10 @@ if __name__ == '__main__':
     for img, label in datagen.flow('val', batch_size, target_size):
         print(i, img.shape, label.shape)
 
+        colored_class_image = datagen.one_hot_to_bgr(label[0], target_size, datagen.n_classes, datagen.labels)
+
         cv2.imshow("normalized", img[0])
-
-        class_scores = label[0]
-        class_scores = class_scores.reshape((target_size[0], target_size[1], datagen.n_classes))
-        class_image = np.argmax(class_scores, axis=2)
-
-        colored_class_image = utils.class_image_to_image(class_image, cityscapes_labels.trainId2label)
-        colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
         cv2.imshow("gt", colored_class_image)
-
         cv2.waitKey()
 
         i += 1
