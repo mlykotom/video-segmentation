@@ -19,6 +19,10 @@ class GTAGenerator(BaseDataGenerator):
         dataset_path = os.path.join(dataset_path, 'gta/')
         super(GTAGenerator, self).__init__(dataset_path, debug_samples)
 
+    @property
+    def name(self):
+        return 'gta'
+
     def _fill_split(self, which_set):
         split = self._get_filenames(which_set)
 

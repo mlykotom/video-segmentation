@@ -4,16 +4,6 @@ import keras.utils
 from keras import optimizers
 from keras.utils import multi_gpu_model
 
-if __package__ is None:
-    import sys
-    from os import path
-
-    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-else:
-    __package__ = ''
-
-import metrics
-
 
 class BaseModel:
     __metaclass__ = ABCMeta
@@ -103,7 +93,7 @@ class BaseModel:
                 show_shapes=True
             )
 
-    def save_final(self, run_name, last_epoch, to_file=None):
+    def save_final(self, to_file, last_epoch):
         """
 
         :param str run_name:
@@ -111,14 +101,11 @@ class BaseModel:
         :param str to_file:
         :return:
         """
-        if to_file is None:
-            to_file = '../../weights/' + ('debug/' if self.is_debug else '') + '%s_%s_(%d)_finished.h5' % (
-                self.name, run_name, last_epoch)
 
-        self.k.save_weights(to_file)
+        self.k.save_weights(to_file + '_%d_finished.h5' % last_epoch)
 
     def compile(self):
-        m_loss = keras.losses.categorical_crossentropy,
+        import metrics
 
         m_metrics = [
             metrics.dice_coef,
@@ -129,15 +116,13 @@ class BaseModel:
 
         if self.is_debug:
             self._model.compile(
-                loss=m_loss,
+                loss=keras.losses.categorical_crossentropy,
                 optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
                 metrics=m_metrics
             )
         else:
             self._model.compile(
-                loss=m_loss,
+                loss=keras.losses.categorical_crossentropy,
                 optimizer=optimizers.Adam(),
                 metrics=m_metrics
             )
-
-        return self._model

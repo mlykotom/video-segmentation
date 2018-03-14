@@ -1,6 +1,5 @@
 # ###############learning rate scheduler####################
 import json
-import os
 
 import numpy as np
 from keras import callbacks
@@ -49,7 +48,7 @@ def lr_scheduler(epochs, lr_base, lr_power):
     return LearningRateScheduler(lr_scheduler)
 
 
-def tensorboard(save_path, run=None, histogram_freq=0):
+def tensorboard(save_path, histogram_freq=0):
     """
     Tensorboard callback
     :param run:
@@ -58,7 +57,7 @@ def tensorboard(save_path, run=None, histogram_freq=0):
     :return:
     """
     tensorboard = TensorBoard(
-        log_dir=os.path.join(save_path, run),
+        log_dir=save_path,
         histogram_freq=histogram_freq,
         write_graph=True
     )
@@ -100,14 +99,15 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
     """
 
     def __init__(self, model, run_name, batch_size):
-        super(SaveLastTrainedEpochCallback, self).__init__()
-        self.model = model
+        self.model_name = model.name
+        self.is_debug = model.is_debug
         self.run_name = run_name
         self.batch_size = batch_size
+        super(SaveLastTrainedEpochCallback, self).__init__()
 
     @staticmethod
-    def get_model_file_name(model):
-        return './checkpoint/' + model.name + ('_d' if model.is_debug else '') + '.last_epoch.json'
+    def get_model_file_name(model_name, is_debug):
+        return './checkpoint/' + model_name + ('_d' if is_debug else '') + '.last_epoch.json'
 
     def on_epoch_end(self, epoch, logs=None):
         """
@@ -116,7 +116,7 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
         :param logs:
         :return:
         """
-        with open(self.get_model_file_name(self.model), 'w') as fp:
+        with open(self.get_model_file_name(self.model_name, self.is_debug), 'w') as fp:
             # saves epoch + 1 (so that this is starting next time)
             json.dump({
                 "epoch": epoch + 1,

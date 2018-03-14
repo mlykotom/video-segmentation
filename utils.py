@@ -3,10 +3,19 @@
 from __future__ import print_function
 
 import colorsys
+import os
 import sys
 
 import numpy as np
 from keras.models import Model
+
+
+def mkdir_recursive(path):
+    sub_path = os.path.dirname(path)
+    if not os.path.exists(sub_path):
+        mkdir_recursive(sub_path)
+    if not os.path.exists(path):
+        os.mkdir(path)
 
 
 def class_image_to_image(class_id_image, class_id_to_rgb_map):

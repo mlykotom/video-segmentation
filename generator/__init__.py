@@ -6,8 +6,8 @@ __all__ = [
     'CamVidFlowGenerator'
 ]
 
-from .camvid_flow_generator import CamVidFlowGenerator
 from .camvid_generator import CamVidGenerator
-from .cityscapes_flow_generator import CityscapesFlowGenerator
+from .camvid_flow_generator import CamVidFlowGenerator
 from .cityscapes_generator import CityscapesGenerator
+from .cityscapes_flow_generator import CityscapesFlowGenerator
 from .gta_generator import GTAGenerator

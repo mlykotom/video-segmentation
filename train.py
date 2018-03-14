@@ -1,8 +1,8 @@
 import argparse
+import os
 from time import gmtime, strftime
 
 import config
-from callbacks import *
 from trainer import Trainer
 
 
@@ -11,14 +11,15 @@ def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, 
     # TODO make smaller
     # target_size = 360, 648
     # target_size = 384, 640
-    target_size = 288, 480
+    # target_size = 288, 480
     # target_size = (1052, 1914) # original
+    target_size = 256, 512
 
     batch_size = batch_size or 2
-    epochs = 200
+    epochs = 1
 
     trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples)
-    model = trainer.model.compile()
+    trainer.model.compile()
 
     if summaries:
         trainer.summaries()
@@ -29,9 +30,6 @@ def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, 
         epochs=epochs,
         restart_training=restart_training
     )
-
-    # save final model
-    model.save_final(run_name, epochs)
 
 
 if __name__ == '__main__':
@@ -57,7 +55,7 @@ if __name__ == '__main__':
 
         parser.add_argument('-m', '--model',
                             help='Model to train [segnet, mobile_unet]',
-                            default='mobile_unet')
+                            default='segnet')
 
         parser.add_argument('-b', '--batch',
                             help='Batch size',
@@ -66,6 +64,12 @@ if __name__ == '__main__':
         parser.add_argument('--gid',
                             help='GPU id',
                             default=None)
+
+        parser.add_argument(
+            '-n', '--name',
+            help='Run Name',
+            default=strftime("%Y_%m_%d_%H:%M", gmtime())
+        )
 
         args = parser.parse_args()
         return args
@@ -89,19 +93,22 @@ if __name__ == '__main__':
     print("restart training", args.restart)
     print("---------------")
     print("batch size", args.batch)
+    print("run name", args.name)
     print("---------------")
 
     if args.gid is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
 
-    run_name = strftime("%Y_%m_%d_%H:%M", gmtime())
-
     try:
-        train(dataset_path, args.model, run_name,
-              debug_samples=int(args.debug),
-              restart_training=args.restart,
-              batch_size=int(args.batch),
-              n_gpu=int(args.gpus),
-              summaries=args.summaries)
+        train(
+            dataset_path=dataset_path,
+            model_name=args.model,
+            run_name=args.name,
+            debug_samples=int(args.debug),
+            restart_training=args.restart,
+            batch_size=int(args.batch),
+            n_gpu=int(args.gpus),
+            summaries=args.summaries
+        )
     except KeyboardInterrupt:
         print("Keyboard interrupted")

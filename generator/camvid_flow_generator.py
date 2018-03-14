@@ -4,16 +4,6 @@ import random
 
 import cv2
 
-if __package__ is None:
-    import sys
-    from os import path
-
-    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-else:
-    __package__ = ''
-
-import config
-
 from base_generator import BaseFlowGenerator
 from camvid_generator import CamVidGenerator
 
@@ -45,6 +35,15 @@ class CamVidFlowGenerator(CamVidGenerator, BaseFlowGenerator):
 
 
 if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    else:
+        __package__ = ''
+
+    import config
 
     if os.environ['USER'] == 'mlykotom':
         dataset_path = '/Users/mlykotom/'

@@ -1,16 +1,4 @@
-import os
-import random
-import re
-
 import cv2
-
-if __package__ is None:
-    import sys
-    from os import path
-
-    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-else:
-    __package__ = ''
 
 from base_generator import BaseFlowGenerator
 from cityscapes_generator import CityscapesGenerator
@@ -18,50 +6,18 @@ from cityscapes_generator import CityscapesGenerator
 
 class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
     def __init__(self, dataset_path, debug_samples=0, how_many_prev=1):
-        self._file_pattern = re.compile("(?P<city>[^_]*)_(?:[^_]+)_(?P<frame>[^_]+)_gtFine_color\.png")
-        self._how_many_prev = how_many_prev
-
-        super(CityscapesFlowGenerator, self).__init__(dataset_path, debug_samples)
-
-    def _fill_split(self, which_set):
-        img_path = os.path.join(self.dataset_path, 'leftImg8bit', which_set, '')
-        lab_path = os.path.join(self.dataset_path, 'gtFine', which_set, '')
-
-        # Get file names for this set
-        filenames = []
-        for root, dirs, files in os.walk(lab_path):
-            for gt_name in files:
-                if gt_name.startswith('._') or not (gt_name.endswith('_color.png')):
-                    continue
-
-                match = self._file_pattern.match(gt_name)
-                if match is None:
-                    print("skipping path %s" % path)
-                    continue
-
-                match_dict = match.groupdict()
-                frame_i = int(match_dict['frame'])
-
-                img_name = os.path.join(img_path, match_dict['city'], gt_name)
-                i_batch = []
-                for i in range(frame_i - self._how_many_prev, frame_i):
-                    frame_str = str(i).zfill(6)
-                    name_i = img_name \
-                        .replace(match_dict['frame'], frame_str) \
-                        .replace("gtFine_color", "leftImg8bit")
-                    i_batch.append(name_i)
-
-                i_batch.append(img_name.replace("gtFine_color", "leftImg8bit"))
-
-                filenames.append((i_batch, os.path.join(root, gt_name)))
-
-        random.shuffle(filenames)
-        print('Cityscapes: ' + which_set + ' ' + str(len(filenames)) + ' files')
-
-        self._data[which_set] = filenames
+        super(CityscapesFlowGenerator, self).__init__(dataset_path, debug_samples, how_many_prev)
 
 
 if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    else:
+        __package__ = ''
+
     import config
 
     datagen = CityscapesFlowGenerator(config.data_path())

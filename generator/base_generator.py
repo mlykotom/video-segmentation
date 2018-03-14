@@ -9,7 +9,12 @@ import tensorflow as tf
 class BaseDataGenerator:
     __metaclass__ = ABCMeta
 
+    @abstractproperty
+    def name(self):
+        pass
+
     def __init__(self, dataset_path, debug_samples=0):
+        self._debug_samples = debug_samples
         self._data = {'train': [], 'val': [], 'test': []}
         self.dataset_path = dataset_path
 

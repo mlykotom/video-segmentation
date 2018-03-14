@@ -1,9 +1,11 @@
 import json
+import os
 
 from keras.callbacks import ModelCheckpoint
 
 import config
 import metrics
+import utils
 from callbacks import SaveLastTrainedEpochCallback, tensorboard
 from generator import *
 from models import *
@@ -25,8 +27,7 @@ class Trainer:
         # self.datagen = GTAGenerator(dataset_path, debug_samples=debug_samples)
         # self.datagen = CamVidGenerator(dataset_path, debug_samples=debug_samples)
         # self.datagen = CamVidFlowGenerator(dataset_path, debug_samples=debug_samples)
-        self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-        # self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+        # self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
 
         # -------------  pick the right model
         # if model_name == 'segnet':
@@ -38,8 +39,12 @@ class Trainer:
         # else:
         #     raise NotImplemented('Unknown model type')
 
-        model = SegNet(target_size, self.datagen.n_classes, is_debug)
-        # model = SegNetWarp(target_size, self.datagen.n_classes, is_debug=is_debug)
+        if model_name == 'segnet':
+            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegNet(target_size, self.datagen.n_classes, is_debug=is_debug)
+        else:
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegNetWarp(target_size, self.datagen.n_classes, is_debug=is_debug)
 
         # -------------  set multi gpu model
         self.model = model
@@ -47,10 +52,6 @@ class Trainer:
         if n_gpu > 1:
             self.cpu_model = model.k
             model.make_multi_gpu(n_gpu)
-
-    @staticmethod
-    def get_save_checkpoint_name(model):
-        return './checkpoint/' + ('debug/' if model.is_debug else '') + model.name + '_save_epoch.h5'
 
     @staticmethod
     def get_gpus():
@@ -61,22 +62,23 @@ class Trainer:
         from tensorflow.python.client import device_lib
         return device_lib.list_local_devices()
 
-    @staticmethod
-    def get_save_weights_name(model, epoch):
-        return model.name + ('_d' if model.is_debug else '') + '_save_epoch-%d.h5' % epoch
+    def get_run_path(self, run_name, prefix_dir='', name_postfix=''):
+        out_dir = os.path.join(prefix_dir, self.datagen.name, self.model.name, 'debug' if self.model.is_debug else '')
 
-    @staticmethod
-    def get_run_path(model, run_name):
-        return ('debug/' if model.is_debug else '') + model.name + '_' + run_name
+        if not os.path.isfile(out_dir):
+            utils.mkdir_recursive(out_dir)
 
-    @staticmethod
-    def get_last_epoch(model):
+        return out_dir + '/' + run_name + name_postfix
+
+    def get_save_checkpoint_name(self, run_name):
+        return self.get_run_path(run_name, './checkpoint/', '_save_epoch.h5')
+
+    def get_last_epoch(self):
         """
-        :param BaseModel model:
         :return tuple(int, str): last saved  epoch or 0
         """
 
-        filename = SaveLastTrainedEpochCallback.get_model_file_name(model)
+        filename = SaveLastTrainedEpochCallback.get_model_file_name(self.model.name, self.model.is_debug)
         print("-- Attempt to load saved info %s" % filename)
         epoch = 0
         weights = None
@@ -88,7 +90,7 @@ class Trainer:
                 epoch = obj['epoch']
                 run_name = obj['run_name']
                 batch_size = obj['batch_size']
-                weights = Trainer.get_save_checkpoint_name(model)
+                weights = self.get_save_checkpoint_name(run_name)
 
         except IOError:
             print("Couldn't load %s file" % filename)
@@ -114,7 +116,7 @@ class Trainer:
         self.train_callbacks.append(save_epoch_callback)
 
         epoch_save = ModelCheckpoint(
-            self.get_save_checkpoint_name(self.model),
+            self.get_save_checkpoint_name(run_name),
             verbose=1,
         )
         self.train_callbacks.append(epoch_save)
@@ -124,7 +126,7 @@ class Trainer:
         batch_size = None
 
         if is_restart_set:
-            restart_epoch, restart_run_name, weights_file, batch_size = Trainer.get_last_epoch(self.model)
+            restart_epoch, restart_run_name, weights_file, batch_size = self.get_last_epoch()
 
             if weights_file is not None:
                 self.model.load_model(
@@ -146,12 +148,12 @@ class Trainer:
 
         # ------------- tensorboard
         # TODO copy output folder after each epoch to remote server
-        tb = tensorboard('../../logs', self.get_run_path(self.model, run_name), histogram_freq=0)
+        tb = tensorboard(self.get_run_path(run_name, '../../logs'), histogram_freq=0)
         self.train_callbacks.append(tb)
 
         # ------------- model checkpoint
         # TODO will not work on PChradis
-        filepath = "../../weights/" + self.get_run_path(self.model, run_name) + '.h5'
+        filepath = self.get_run_path(run_name, '../../weights/', '.h5')
 
         checkpoint = ModelCheckpoint(
             filepath,
@@ -192,6 +194,9 @@ class Trainer:
             max_queue_size=20,
             use_multiprocessing=True
         )
+
+        # save final model
+        self.model.save_final(self.get_run_path(run_name, '../../weights/'), epochs)
 
 
 if __name__ == '__main__':
