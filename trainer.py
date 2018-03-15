@@ -43,8 +43,8 @@ class Trainer:
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = SegNet(target_size, self.datagen.n_classes, is_debug=is_debug)
         else:
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegNetWarp(target_size, self.datagen.n_classes, is_debug=is_debug)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flow_with_diff=True)
+            model = SegNetWarpDiff(target_size, self.datagen.n_classes, is_debug=is_debug)
 
         # -------------  set multi gpu model
         self.model = model

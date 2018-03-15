@@ -1,7 +1,8 @@
+import keras
 from keras import Input, Model
 from keras.layers import Conv2D, concatenate, Reshape, Activation
 
-from .base_model import BaseModel
+from base_model import BaseModel
 
 
 class FlowCNN(BaseModel):
@@ -21,3 +22,11 @@ class FlowCNN(BaseModel):
         x = Conv2D(2, (3, 3), padding='same')(x)
 
         return Model([img_flo, img_old, img_new, img_diff], x)
+
+
+if __name__ == '__main__':
+    target_size = (288, 480)
+    model = FlowCNN(target_size, 32)
+
+    # print(model.summary())
+    keras.utils.plot_model(model.k, 'flow_cnn.png', show_shapes=True, show_layer_names=True)

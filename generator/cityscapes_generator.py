@@ -2,18 +2,20 @@ import os
 import random
 import re
 
-import cityscapes_labels
-import config
 import cv2
 
 from base_generator import BaseDataGenerator
 
+import cityscapes_labels
+
 
 class CityscapesGenerator(BaseDataGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=0):
+    def __init__(self, dataset_path, debug_samples=0, how_many_prev=0, prev_skip=0):
+
         dataset_path = os.path.join(dataset_path, 'cityscapes/')
         self._file_pattern = re.compile("(?P<city>[^_]*)_(?:[^_]+)_(?P<frame>[^_]+)_gtFine_color\.png")
         self._how_many_prev = how_many_prev
+        self._prev_skip = prev_skip
         super(CityscapesGenerator, self).__init__(dataset_path, debug_samples)
 
     _city_labels = [lab.color for lab in cityscapes_labels.labels]
@@ -27,7 +29,7 @@ class CityscapesGenerator(BaseDataGenerator):
 
     @property
     def name(self):
-        return 'cityscapes'
+        return 'city'
 
     @property
     def config(self):
@@ -57,12 +59,13 @@ class CityscapesGenerator(BaseDataGenerator):
                     i_batch = img_name.replace("gtFine_color", "leftImg8bit")
                 else:
                     i_batch = []
-                    for i in range(frame_i - self._how_many_prev, frame_i):
+                    for i in range(frame_i - self._how_many_prev - self._prev_skip, frame_i - self._prev_skip):
                         frame_str = str(i).zfill(6)
                         name_i = img_name \
                             .replace(match_dict['frame'], frame_str) \
                             .replace("gtFine_color", "leftImg8bit")
                         i_batch.append(name_i)
+
                     i_batch.append(img_name.replace("gtFine_color", "leftImg8bit"))
 
                 filenames.append((i_batch, os.path.join(root, gt_name)))
@@ -101,6 +104,8 @@ if __name__ == '__main__':
         sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
     else:
         __package__ = ''
+
+    import config
 
     datagen = CityscapesGenerator(config.data_path())
 

@@ -16,7 +16,7 @@ def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, 
     target_size = 256, 512
 
     batch_size = batch_size or 2
-    epochs = 1
+    epochs = 200
 
     trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples)
     trainer.model.compile()
