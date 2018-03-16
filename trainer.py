@@ -1,6 +1,7 @@
 import json
 import os
 
+import keras
 from keras.callbacks import ModelCheckpoint
 
 import config
@@ -43,7 +44,8 @@ class Trainer:
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = SegNet(target_size, self.datagen.n_classes, is_debug=is_debug)
         else:
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flow_with_diff=True)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
+                                                   flow_with_diff=True)
             model = SegNetWarpDiff(target_size, self.datagen.n_classes, is_debug=is_debug)
 
         # -------------  set multi gpu model
@@ -163,6 +165,18 @@ class Trainer:
             mode='min'
         )
         self.train_callbacks.append(checkpoint)
+
+        # ------------- early stopping
+        if not self.is_debug:
+            early_stopping = keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                min_delta=0,
+                patience=5,
+                verbose=1,
+                mode='min'
+            )
+
+            self.train_callbacks.append(early_stopping)
 
     def fit_model(self, run_name='', epochs=100, restart_training=False):
         restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)

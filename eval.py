@@ -1,43 +1,24 @@
 # model
-import os
 
-import keras
-from keras import losses, optimizers
-
-import cityscapes_labels
 import config
-import metrics
-from generator.gta_generator import GTAGenerator
-from models import MobileUNet
+from generator import *
+from models import *
 
 batch_size = 1
-target_size = 384, 640
+target_size = 256, 512
 # target_size = (1052, 1914)
-labels = cityscapes_labels.labels
-n_classes = len(labels)
-dataset_path = config.data_path('gta')
-images_path = os.path.join(dataset_path, 'images/')
-labels_path = os.path.join(dataset_path, 'labels/')
+dataset_path = config.data_path()
 
-model = MobileUNet(target_size, n_classes)
+# model = MobileUNet(target_size, n_classes)
+# model.k.load_weights('weights/MobileUNet_2018_02_15_09:34_cat_acc-0.89.hdf5')
+datagen = CityscapesFlowGenerator(dataset_path, flow_with_diff=True)
 
-model.k.load_weights('weights/MobileUNet_2018_02_15_09:34_cat_acc-0.89.hdf5')
-
+model = SegNetWarpDiff(target_size, datagen.n_classes)
+model.k.load_weights('../../weights/city/SegNetWarpDiff/warp_diff.h5')
+model.compile()
 # model.summary()
 
-model.k.compile(
-    loss=losses.categorical_crossentropy,
-    optimizer=optimizers.Adam(lr=0.001),
-    metrics=[
-        metrics.dice_coef,
-        metrics.precision,
-        keras.metrics.categorical_accuracy
-    ]
-)
-
-datagen = GTAGenerator(dataset_path)
-
-eval_batch_size = 4
+eval_batch_size = 5
 
 prediction = model.k.evaluate_generator(
     generator=datagen.flow('test', eval_batch_size, target_size),
@@ -46,5 +27,3 @@ prediction = model.k.evaluate_generator(
 
 print(model.k.metrics_names)
 print(prediction)
-
-model.k.predict()

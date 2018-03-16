@@ -1,7 +1,7 @@
 import keras
 from keras import Input, Model
 from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Lambda, \
-    Add, concatenate, Conv2D
+    Add, concatenate, Conv2D, Dropout, SpatialDropout2D
 
 from base_model import BaseModel
 from layers import tf_warp
@@ -9,8 +9,14 @@ from layers import tf_warp
 
 class SegNetWarpDiff(BaseModel):
 
-    def netwarp_module(self):
-        pass
+    def netwarp_module(self, img_old, img_new, flo, diff):
+        x = concatenate([img_old, img_new, flo, diff])
+        x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+        x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+        x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
+        x = concatenate([flo, x])
+        transformed_flow = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
+        return transformed_flow
 
     def _block(self, input, filter_size, kernel_size, pool_size):
         out = Convolution2D(filter_size, kernel_size, padding='same')(input)
@@ -40,14 +46,7 @@ class SegNetWarpDiff(BaseModel):
             return out
 
         # encoder
-        x = concatenate([img_old, img_new, flo, diff])
-
-        x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
-
-        x = concatenate([flo, x])
-        transformed_flow = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
+        transformed_flow = self.netwarp_module(img_old, img_new, flo, diff)
 
         flow1 = MaxPooling2D(pool_size=pool_size, name='flow_down_1')(transformed_flow)
         flow2 = MaxPooling2D(pool_size=pool_size, name='flow_down_2')(flow1)
@@ -65,9 +64,9 @@ class SegNetWarpDiff(BaseModel):
         new_branch2 = self._block(new_branch, 128, kernel_size, pool_size)
         old_branch2 = self._block(old_branch, 128, kernel_size, pool_size)
 
-        # warped3 = Lambda(warp, name="warp2")([old_branch2, flow2])
-        # warped3 = self._block(warped3, 256, kernel_size, pool_size)
-        # warped3 = self._block(warped3, 512, kernel_size, pool_size=None)
+        warped3 = Lambda(warp, name="warp2")([old_branch2, flow2])
+        warped3 = self._block(warped3, 256, kernel_size, pool_size)
+        warped3 = self._block(warped3, 512, kernel_size, pool_size=None)
 
         new_branch3 = self._block(new_branch2, 256, kernel_size, pool_size)
         old_branch3 = self._block(old_branch2, 256, kernel_size, pool_size)
@@ -78,10 +77,7 @@ class SegNetWarpDiff(BaseModel):
         warped4 = Lambda(warp, name="warp3")([old_branch4, flow3])
         out = Add()([warped4, new_branch4])
 
-        # warped = Lambda(warp_test, name="warp")([old_branch, flo])
-        # out = concatenate([warped, new_branch])
-
-        # out = new_branch
+        out = SpatialDropout2D(0.2)(out)
 
         # decoder
         out = Convolution2D(512, kernel_size, padding='same')(out)
@@ -111,7 +107,7 @@ class SegNetWarpDiff(BaseModel):
 
 if __name__ == '__main__':
     target_size = (288, 480)
-    model = SegNetWarp(target_size, 32)
+    model = SegNetWarpDiff(target_size, 32)
 
     print(model.summary())
     keras.utils.plot_model(model.k, 'segnet_warp_diff.png', show_shapes=True, show_layer_names=True)

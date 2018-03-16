@@ -34,3 +34,7 @@ def data_path(dataset=None):
         data_path = os.path.join(data_path, dataset, '')
 
     return data_path
+
+
+def target_size():
+    return 256, 512

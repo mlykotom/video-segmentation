@@ -181,7 +181,7 @@ class BaseFlowGenerator(BaseDataGenerator):
         self._disFlow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
         super(BaseFlowGenerator, self).__init__(dataset_path, debug_samples)
 
-    def calc_optical_flow(self, old, new, flow_type):
+    def calc_optical_flow(self, old, new, flow_type='dis'):
         old_gray = cv2.cvtColor(old, cv2.COLOR_RGB2GRAY)
         new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 

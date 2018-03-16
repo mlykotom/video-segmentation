@@ -2,82 +2,73 @@ import os
 
 import cv2
 import numpy as np
-from keras import losses, optimizers
-from tensorflow.python.client import device_lib
 
-import cityscapes_labels
 import config
-import utils
-from generator import gta_generator
-from models import MobileNetUnet
+from generator import *
+from models import *
 
-print(device_lib.list_local_devices())
+if __name__ == '__main__':
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-vid = cv2.VideoCapture("/home/mlyko/data/drive.mp4")
+    vid = cv2.VideoCapture("/home/mlyko/data/drive.mp4")
 
-target_size = 288, 480
-labels = cityscapes_labels.labels
-n_classes = len(labels)
+    datagen = CityscapesFlowGenerator(config.data_path())
+    model = SegNetWarpDiff(config.target_size(), datagen.n_classes)
 
-datagen = gta_generator.GTAGenerator(config.data_path())
-model = MobileNetUnet((target_size[0], target_size[1]), n_classes)
+    model.k.load_weights('../../weights/city/SegNetWarpDiff/warp_diff.h5')
+    model.compile()
 
-weights = '/home/mlyko/weights/MobileNetUnet_2018_02_20_08:33_cat_acc-0.89.hdf5'
-model.k.load_weights(weights)
-model.k.compile(
-    loss=losses.categorical_crossentropy,
-    optimizer=optimizers.Adam(),
-)
+    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+    out = cv2.VideoWriter('segnet_warp_next.avi', fourcc, 25.0, config.target_size()[::-1])
 
-fourcc = cv2.VideoWriter_fourcc(*'H264')
-out = cv2.VideoWriter('mobilenet_eval.avi', fourcc, 20.0, (target_size[1], target_size[0]))
+    print("reading")
+    try:
+        i = 0
+        last_frame = None
+        while True:
+            ret, frame = vid.read()
+            if not ret:
+                vid.release()
+                print("Released Video Resource")
+                break
 
-print("reading")
-try:
-    i = 0
-    while True:
-        ret, frame = vid.read()
-        if not ret:
-            vid.release()
-            print("Released Video Resource")
-            break
+            if i < 500:
+                i += 1
+                continue
 
-        if i < 200:
+            frame = cv2.resize(frame, config.target_size()[::-1])
+            if last_frame is None:
+                last_frame = frame
+
+            flow = datagen.calc_optical_flow(last_frame, frame)
+
+            frame_norm = datagen.normalize(frame, config.target_size())
+            last_frame_norm = datagen.normalize(last_frame, config.target_size())
+
+            input = [
+                np.array([last_frame_norm]),
+                np.array([frame_norm]),
+                np.array([flow]),
+                np.array([frame_norm - last_frame_norm])
+            ]
+
+            prediction = model.k.predict(input, 1, verbose=1)
+
+            colored_class_image = datagen.one_hot_to_bgr(prediction, config.target_size(), datagen.n_classes,
+                                                         datagen.labels)
+            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            alpha_blended = 0.5 * colored_class_image + 0.5 * img
+            alpha_blended = alpha_blended.astype('uint8')
+
+            out.write(alpha_blended)
+            last_frame = frame
+
             i += 1
-            continue
 
-        # frame = cv2.imread('/home/mlyko/data/gta/images/23333.png')
-        # if frame is None:
-        #     raise Exception("Image not found")
-
-        frame = cv2.resize(frame, (target_size[1], target_size[0]))
-        norm = datagen.normalize(frame, target_size)
-        prediction = model.k.predict(np.array([norm]), 1, verbose=1)
-
-        class_scores = prediction.reshape((target_size[0], target_size[1], n_classes))
-        class_image = np.argmax(class_scores, axis=2)
-        colored_class_image = utils.class_image_to_image(class_image, cityscapes_labels.trainId2label)
-
-        colored_class_image = cv2.cvtColor(colored_class_image, cv2.COLOR_RGB2BGR)
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        alpha_blended = 0.5 * colored_class_image + 0.5 * img
-        alpha_blended = alpha_blended.astype('uint8')
-
-        out.write(alpha_blended)
-        # cv2.imwrite("eval_video/res_" + str(i) + ".jpg", colored_class_image)
-
-        i += 1
-        # print("yolo", frame.shape)
-        # cv2.imshow("res?", colored_class_image)
-        # cv2.waitKey()
-        # print(frame.shape)
-        # cv2.imshow("frame", frame)
-
-except KeyboardInterrupt:
-    # Release the Video Device
-    vid.release()
-    # Message to be displayed after releasing the device
-    print "Released Video Resource"
+    except KeyboardInterrupt:
+        # Release the Video Device
+        vid.release()
+        # Message to be displayed after releasing the device
+        print("Released Video Resource")
