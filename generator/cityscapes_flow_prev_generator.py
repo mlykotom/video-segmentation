@@ -1,8 +1,3 @@
-import os
-
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
 import cv2
 import itertools
 
@@ -12,55 +7,49 @@ from base_generator import BaseFlowGenerator
 from cityscapes_generator import CityscapesGenerator
 
 
-class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flow_with_diff=False, flip_enabled=True):
+class CityscapesFlowPrev2Generator(CityscapesGenerator, BaseFlowGenerator):
+    def __init__(self, dataset_path, debug_samples=0, how_many_prev=2, prev_skip=0, flow_with_diff=False):
         self._flow_with_diff = flow_with_diff
-        self.flip_enabled = flip_enabled
-        super(CityscapesFlowGenerator, self).__init__(dataset_path, debug_samples, how_many_prev, prev_skip)
-
-    def steps_per_epoch(self, type, batch_size, gpu_count=1):
-        steps = super(CityscapesFlowGenerator, self).steps_per_epoch(type, batch_size, gpu_count)
-        return (steps * 2) if self.flip_enabled else steps
+        super(CityscapesFlowPrev2Generator, self).__init__(dataset_path, debug_samples, how_many_prev, prev_skip)
 
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
-        i = 0
-
         while True:
             input1_arr = []
             input2_arr = []
+            input3_arr = []
             flow_arr = []
+            flow2_arr = []
             diff_arr = []
+            diff2_arr = []
             out_arr = []
 
             for _ in range(batch_size):
-                (img_old_path, img_new_path), label_path = next(zipped)
+                (img_minus_2_path, img_minus_1_path, img_new_path), label_path = next(zipped)
 
-                img = cv2.resize(self._load_img(img_old_path), target_size[::-1])
-                img2 = cv2.resize(self._load_img(img_new_path), target_size[::-1])
-
-                if self.flip_enabled and i % 2 == 0:
-                    img = cv2.flip(img, 1)
-                    img2 = cv2.flip(img2, 1)
-
-                flow = self.calc_optical_flow(img, img2, 'dis')
-                # flow[..., 0] = np.where(np.abs(flow[..., 0]) > 4, flow[..., 0], -1)
-                # flow = np.where(np.abs(flow) > 4, flow, -1)
+                img = cv2.resize(self._load_img(img_minus_2_path), target_size[::-1])
+                img2 = cv2.resize(self._load_img(img_minus_1_path), target_size[::-1])
+                img3 = cv2.resize(self._load_img(img_new_path), target_size[::-1])
+                flow_prev = self.calc_optical_flow(img, img2, 'dis')
+                flow_now = self.calc_optical_flow(img2, img3, 'dis')
 
                 input1 = self.normalize(img, target_size=None)
                 input2 = self.normalize(img2, target_size=None)
-                diff = input2 - input1
+                input3 = self.normalize(img3, target_size=None)
+                diff_prev = input2 - input1
+                diff_now = input3 - input2
 
                 input1_arr.append(input1)
                 input2_arr.append(input2)
-                diff_arr.append(diff)
-                flow_arr.append(flow)
+                input3_arr.append(input3)
+
+                diff_arr.append(diff_prev)
+                diff2_arr.append(diff_now)
+
+                flow_arr.append(flow_prev)
+                flow_arr.append(flow_now)
 
                 seg_tensor = cv2.imread(label_path)
-
-                if self.flip_enabled and i % 2 == 0:
-                    seg_tensor = cv2.flip(seg_tensor, 1)
-
                 seg_tensor = self.one_hot_encoding(seg_tensor, target_size)
                 out_arr.append(seg_tensor)
 
@@ -79,8 +68,6 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
                 ]
 
             y = np.array(out_arr)
-
-            i += 1
             yield x, y
 
 

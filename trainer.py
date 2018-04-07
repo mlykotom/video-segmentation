@@ -1,26 +1,27 @@
 import json
-import os
 
-import keras
 from keras.callbacks import ModelCheckpoint
-
+import os
 import config
 import metrics
 import utils
-from callbacks import SaveLastTrainedEpochCallback, tensorboard
+from callbacks import SaveLastTrainedEpochCallback, CustomTensorBoard
 from generator import *
 from models import *
 
+because_os_gets_dismissed = os.name
 
 class Trainer:
     train_callbacks = []
 
-    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0):
+    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10):
         is_debug = debug_samples > 0
+        self.debug_samples = debug_samples
         self.is_debug = is_debug
         self.n_gpu = n_gpu
         self.batch_size = batch_size * n_gpu
         self.target_size = target_size
+        self._early_stopping = early_stopping
         print("-- Number of GPUs used %d" % self.n_gpu)
         print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
@@ -43,10 +44,20 @@ class Trainer:
         if model_name == 'segnet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = SegNet(target_size, self.datagen.n_classes, is_debug=is_debug)
+        elif model_name == 'segnet_warp':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
+                                                   flow_with_diff=True)
+            model = SegNetWarpDiff123(target_size, self.datagen.n_classes, is_debug=is_debug)
+        elif model_name == 'app_mobile_unet':
+            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
+            model = AppMobileNetUnet(target_size, self.datagen.n_classes, is_debug=is_debug)
+        elif model_name == 'mobile_unet':
+            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
+            model = MobileUNet(target_size, self.datagen.n_classes, is_debug=is_debug)
         else:
             self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
                                                    flow_with_diff=True)
-            model = SegNetWarpDiff(target_size, self.datagen.n_classes, is_debug=is_debug)
+            model = MobileUNetWarp2(target_size, self.datagen.n_classes, is_debug=is_debug)
 
         # -------------  set multi gpu model
         self.model = model
@@ -65,7 +76,20 @@ class Trainer:
         return device_lib.list_local_devices()
 
     def get_run_path(self, run_name, prefix_dir='', name_postfix=''):
-        out_dir = os.path.join(prefix_dir, self.datagen.name, self.model.name, 'debug' if self.model.is_debug else '')
+        """
+        #TODO when directory already exist, use new with prefix _2 or _3 ,...
+        :param run_name:
+        :param prefix_dir:
+        :param name_postfix:
+        :return:
+        """
+        out_dir = os.path.join(
+            prefix_dir,
+            self.datagen.name,
+            'deb' if self.model.is_debug else 'rel',
+            self.model.name,
+            str(self.debug_samples) if self.is_debug else '',
+        )
 
         if not os.path.isfile(out_dir):
             utils.mkdir_recursive(out_dir)
@@ -134,23 +158,32 @@ class Trainer:
                 self.model.load_model(
                     weights_file,
                     custom_objects={
-                        'dice_coef': metrics.dice_coef,
+                        # 'dice_coef': metrics.dice_coef,
                         'precision': metrics.precision,
+                        'recall': metrics.recall,
+                        'f1_score': metrics.f1_score,
                         'mean_iou': metrics.mean_iou
                     }
                 )
 
         return restart_epoch, restart_run_name, batch_size
 
-    def prepare_callbacks(self, run_name):
+    def prepare_callbacks(self, run_name, epochs, use_validation_data=False):
         # ------------- lr scheduler
-        # lr_base = 0.01 * (float(batch_size) / 16)
+        # lr_base = 0.01 * (float(self.batch_size) / 16)
         # lr_power = 0.9
         # self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
 
         # ------------- tensorboard
         # TODO copy output folder after each epoch to remote server
-        tb = tensorboard(self.get_run_path(run_name, '../../logs'), histogram_freq=0)
+
+        tb = CustomTensorBoard(
+            (self.cpu_model if self.n_gpu > 1 else self.model.k),
+            self.get_run_path(run_name, '../../logs'),
+            self.batch_size,
+            histogram_freq=use_validation_data
+        )
+
         self.train_callbacks.append(tb)
 
         # ------------- model checkpoint
@@ -171,7 +204,7 @@ class Trainer:
             early_stopping = keras.callbacks.EarlyStopping(
                 monitor='val_loss',
                 min_delta=0,
-                patience=5,
+                patience=self._early_stopping,
                 verbose=1,
                 mode='min'
             )
@@ -183,8 +216,6 @@ class Trainer:
         if restart_run_name is not None:
             run_name = restart_run_name
 
-        self.prepare_callbacks(run_name)
-
         if self.n_gpu > 1 and self.cpu_model is not None:
             # WARNING: multi gpu model not working on version keras 2.1.4, this is workaround
             self.model.k.__setattr__('callback_model', self.cpu_model)
@@ -193,8 +224,15 @@ class Trainer:
 
         train_generator = self.datagen.flow('train', batch_size, self.target_size)
         train_steps = self.datagen.steps_per_epoch('train', batch_size)
+
+        # val_data = self.datagen.load_data('val', batch_size, self.target_size)
+        val_data = None
         val_generator = self.datagen.flow('val', batch_size, self.target_size)
         val_steps = self.datagen.steps_per_epoch('val', batch_size)
+
+        shuffler = keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: self.datagen.shuffle('train'))
+        self.train_callbacks.append(shuffler)
+        self.prepare_callbacks(run_name, epochs, use_validation_data=val_data is not None)
 
         self.model.k.fit_generator(
             generator=train_generator,
@@ -202,6 +240,7 @@ class Trainer:
             epochs=epochs,
             initial_epoch=restart_epoch,
             verbose=1,
+            # validation_data=val_data,
             validation_data=val_generator,
             validation_steps=val_steps,
             callbacks=self.train_callbacks,

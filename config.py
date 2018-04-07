@@ -3,7 +3,7 @@ import os
 
 # ======= data path
 
-def data_path(dataset=None):
+def data_path():
     """
     1) tries to get data path from os environments $DATASETS
     2) metacentrum
@@ -30,11 +30,16 @@ def data_path(dataset=None):
         else:
             raise Exception("Unknown data path!")
 
-    if dataset is not None:
-        data_path = os.path.join(data_path, dataset, '')
-
     return data_path
 
 
 def target_size():
+    # return 360, 648
+    # return 384, 640
+    # return 288, 480
+    # return (1052, 1914) # original
     return 256, 512
+
+
+def weights_path():
+    return '/home/mlyko/weights/'

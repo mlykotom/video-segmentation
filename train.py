@@ -7,18 +7,11 @@ from trainer import Trainer
 
 
 def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, restart_training=False,
-          batch_size=None, n_gpu=1, summaries=False):
-    # TODO make smaller
-    # target_size = 360, 648
-    # target_size = 384, 640
-    # target_size = 288, 480
-    # target_size = (1052, 1914) # original
-    target_size = 256, 512
-
+          batch_size=None, n_gpu=1, summaries=False, epochs=150, early_stopping=10):
+    target_size = config.target_size()
     batch_size = batch_size or 2
-    epochs = 200
 
-    trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples)
+    trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping)
     trainer.model.compile()
 
     if summaries:
@@ -61,6 +54,14 @@ if __name__ == '__main__':
                             help='Batch size',
                             default=2)
 
+        parser.add_argument('-e', '--epochs',
+                            help='Number of epochs',
+                            default=150)
+
+        parser.add_argument('-s', '--stop',
+                            help='Early stopping',
+                            default=5)
+
         parser.add_argument('--gid',
                             help='GPU id',
                             default=None)
@@ -97,7 +98,14 @@ if __name__ == '__main__':
     print("---------------")
 
     if args.gid is not None:
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
+        if args.gid == "cpu":
+            # use CPU
+            print("-- Using CPU")
+            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+            os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        else:
+            print("-- Using GPU id %s" % args.gid)
+            os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
 
     try:
         train(
@@ -108,7 +116,9 @@ if __name__ == '__main__':
             restart_training=args.restart,
             batch_size=int(args.batch),
             n_gpu=int(args.gpus),
-            summaries=args.summaries
+            summaries=args.summaries,
+            epochs=int(args.epochs),
+            early_stopping=int(args.stop)
         )
     except KeyboardInterrupt:
         print("Keyboard interrupted")

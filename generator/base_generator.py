@@ -1,4 +1,5 @@
 import itertools
+import random
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 import cv2
@@ -56,17 +57,22 @@ class BaseDataGenerator:
         """
         pass
 
+    def shuffle(self, type):
+        print("Cityscapes: shuffling dataset")
+        random.shuffle(self._data[type])
+
     def normalize(self, rgb, target_size, equalize_hist=False):
         if target_size is not None:
             rgb = cv2.resize(rgb, target_size[::-1])
 
         norm_image = np.zeros_like(rgb, dtype=np.float32)
+        # if equalize_hist:
+        # raise NotImplementedError("not implemented equalize")
+        # norm_image[:, :, 0] = cv2.equalizeHist(rgb[:, :, 0])
+        # norm_image[:, :, 1] = cv2.equalizeHist(rgb[:, :, 1])
+        # norm_image[:, :, 2] = cv2.equalizeHist(rgb[:, :, 2])
 
-        if equalize_hist:
-            norm_image[:, :, 0] = cv2.equalizeHist(rgb[:, :, 0])
-            norm_image[:, :, 1] = cv2.equalizeHist(rgb[:, :, 1])
-            norm_image[:, :, 2] = cv2.equalizeHist(rgb[:, :, 2])
-
+        # norm_image = norm_image / 256.0
         cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         return norm_image
 
@@ -121,7 +127,7 @@ class BaseDataGenerator:
     def load_data(self, type, batch_size, target_size):
         data = []
         labs = []
-        from ..utils import print_progress
+        from utils import print_progress
         # A List of Items
         data_length = len(self._data[type])
 
@@ -178,7 +184,7 @@ class BaseFlowGenerator(BaseDataGenerator):
     __metaclass__ = ABCMeta
 
     def __init__(self, dataset_path, debug_samples=0):
-        self._disFlow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
+        self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
         super(BaseFlowGenerator, self).__init__(dataset_path, debug_samples)
 
     def calc_optical_flow(self, old, new, flow_type='dis'):
@@ -186,12 +192,16 @@ class BaseFlowGenerator(BaseDataGenerator):
         new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 
         if flow_type == 'dis':
-            return self._disFlow.calc(old_gray, new_gray, None)
+            return self.optical_flow.calc(old_gray, new_gray, None)
         else:
             return cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
 
+    def flow_just_img(self, type, batch_size, target_size):
+        return super(BaseFlowGenerator, self).flow(type, batch_size, target_size)
+
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
+
         while True:
             input1_arr = []
             input2_arr = []

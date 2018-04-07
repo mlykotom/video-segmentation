@@ -3,7 +3,7 @@ import keras.backend as K
 from keras import Input
 from keras.applications import mobilenet
 from keras.applications.mobilenet import DepthwiseConv2D
-from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Dropout
+from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Dropout, SpatialDropout2D
 from keras.models import Model
 
 from base_model import BaseModel
@@ -148,14 +148,7 @@ class MobileUNet(BaseModel):
         return Activation(mobilenet.relu6, name='conv_pw_%d_relu' % block_id)(x)
 
     def _create_model(self):
-        # img_input = Input(shape=(self.target_size[0], self.target_size[1], 3))
-
-        img_old = Input(shape=self.target_size + (3,), name='data_0')
-        img_new = Input(shape=self.target_size + (3,), name='data_1')
-        flo = Input(shape=self.target_size + (2,), name='flow')
-
-        all_inputs = [img_old, img_new, flo]
-        input = concatenate(all_inputs)
+        input = Input(shape=(self.target_size[0], self.target_size[1], 3))
 
         b00 = self._conv_block(input, 32, self.alpha, strides=(2, 2), block_id=0)
         b01 = self._depthwise_conv_block(b00, 64, self.alpha, self.depth_multiplier, block_id=1)
@@ -175,14 +168,17 @@ class MobileUNet(BaseModel):
 
         b12 = self._depthwise_conv_block(b11, 1024, self.alpha, self.depth_multiplier, block_id=12, strides=(2, 2))
         b13 = self._depthwise_conv_block(b12, 1024, self.alpha, self.depth_multiplier, block_id=13)
+
         if not self.is_debug:
-            b13 = Dropout(self.dropout)(b13)
+            b13 = SpatialDropout2D(0.2)(b13)
 
         filters = int(512 * self.alpha)
         up1 = concatenate([
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b13),
             b11,
         ], axis=3)
+        # up1 = BatchNormalization()(up1)
+
         b14 = self._depthwise_conv_block(up1, filters, self.alpha_up, self.depth_multiplier, block_id=14)
 
         filters = int(256 * self.alpha)
@@ -190,6 +186,8 @@ class MobileUNet(BaseModel):
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b14),
             b05,
         ], axis=3)
+        # up2 = BatchNormalization()(up2)
+
         b15 = self._depthwise_conv_block(up2, filters, self.alpha_up, self.depth_multiplier, block_id=15)
 
         filters = int(128 * self.alpha)
@@ -197,6 +195,8 @@ class MobileUNet(BaseModel):
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b15),
             b03,
         ], axis=3)
+        # up3 = BatchNormalization()(up3)
+
         b16 = self._depthwise_conv_block(up3, filters, self.alpha_up, self.depth_multiplier, block_id=16)
 
         filters = int(64 * self.alpha)
@@ -204,12 +204,16 @@ class MobileUNet(BaseModel):
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b16),
             b01,
         ], axis=3)
+        # up4 = BatchNormalization()(up4)
+
         b17 = self._depthwise_conv_block(up4, filters, self.alpha_up, self.depth_multiplier, block_id=17)
 
         filters = int(32 * self.alpha)
         up5 = concatenate([b17, b00], axis=3)
-        # b18 = self._depthwise_conv_block(up5, filters, self.alpha_up, self.depth_multiplier, block_id=18)
-        b18 = self._conv_block(up5, filters, self.alpha_up, block_id=18)
+        up5 = BatchNormalization()(up5)
+
+        b18 = self._depthwise_conv_block(up5, filters, self.alpha_up, self.depth_multiplier, block_id=18)
+        b18 = self._conv_block(b18, filters, self.alpha_up, block_id=18)
 
         x = Conv2D(self.n_classes, (1, 1), kernel_initializer='he_normal', activation='linear')(b18)
         x = BilinearUpSampling2D(size=(2, 2))(x)
@@ -217,7 +221,7 @@ class MobileUNet(BaseModel):
         x = Reshape((-1, self.n_classes))(x)
         x = Activation('softmax')(x)
 
-        return Model(all_inputs, x)
+        return Model(input, x)
 
     custom_objects = {
         'relu6': mobilenet.relu6,
@@ -231,4 +235,4 @@ if __name__ == '__main__':
 
     model = MobileUNet(target_size, 32)
     print(model.summary())
-    keras.utils.plot_model(model.k, 'mobilenet_unet.png', show_shapes=True, show_layer_names=True)
+    keras.utils.plot_model(model.k, 'mobile_unet.png', show_shapes=True, show_layer_names=True)

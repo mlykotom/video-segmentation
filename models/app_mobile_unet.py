@@ -7,14 +7,14 @@ from models.layers import BilinearUpSampling2D
 from .base_model import BaseModel
 
 
-class MobileNetUnet(BaseModel):
+class AppMobileNetUnet(BaseModel):
 
     def __init__(self, target_size, n_classes, is_debug=False):
         self.alpha = 1.0
         self.alpha_up = 1.0
         self.depth_multiplier = 1
 
-        super(MobileNetUnet, self).__init__(target_size, n_classes, is_debug)
+        super(AppMobileNetUnet, self).__init__(target_size, n_classes, is_debug)
 
     @staticmethod
     def _conv_block(inputs, filters, alpha, kernel=(3, 3), strides=(1, 1), block_id=1):
@@ -192,8 +192,8 @@ class MobileNetUnet(BaseModel):
 
         filters = int(32 * self.alpha)
         up5 = concatenate([b17, b00], axis=3)
-        # b18 = _depthwise_conv_block(up5, filters, self.alpha_up, self.depth_multiplier, block_id=18)
-        b18 = self._conv_block(up5, filters, self.alpha_up, block_id=18)
+        b18 = self._depthwise_conv_block(up5, filters, self.alpha_up, self.depth_multiplier, block_id=18)
+        b18 = self._conv_block(b18, filters, self.alpha_up, block_id=18)
 
         x = Conv2D(self.n_classes, (1, 1), kernel_initializer='he_normal', activation='linear')(b18)
         x = BilinearUpSampling2D(size=(2, 2))(x)

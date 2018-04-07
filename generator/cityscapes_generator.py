@@ -4,13 +4,12 @@ import re
 
 import cv2
 
-from base_generator import BaseDataGenerator
-
 import cityscapes_labels
+from base_generator import BaseDataGenerator
 
 
 class CityscapesGenerator(BaseDataGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=0, prev_skip=0):
+    def __init__(self, dataset_path, debug_samples=0, how_many_prev=0, prev_skip=0, old_labels=False):
 
         dataset_path = os.path.join(dataset_path, 'cityscapes/')
         self._file_pattern = re.compile("(?P<city>[^_]*)_(?:[^_]+)_(?P<frame>[^_]+)_gtFine_color\.png")
@@ -26,6 +25,10 @@ class CityscapesGenerator(BaseDataGenerator):
         "std": (0.1829540508368939, 0.18656561047509476, 0.18447508988480435),
         "mean": (0.29010095242892997, 0.32808144844279574, 0.28696394422942517)
     }
+
+    @property
+    def old_labels(self):
+        return [lab.color for lab in cityscapes_labels.labels_old]
 
     @property
     def name(self):
@@ -70,30 +73,19 @@ class CityscapesGenerator(BaseDataGenerator):
 
                 filenames.append((i_batch, os.path.join(root, gt_name)))
 
-        if not (self._debug_samples):
-            print("Cityscapes: shuffling dataset")
-            random.shuffle(filenames)
-
         print('Cityscapes: ' + which_set + ' ' + str(len(filenames)) + ' files')
-
         self._data[which_set] = filenames
 
-        # # Get file names for this set
-        # filenames = []
-        # for root, dirs, files in os.walk(img_path):
-        #     for name in files:
-        #         file = os.path.join(root[-root[::-1].index('/'):], name)
-        #         img_file = os.path.join(img_path, file)
-        #         lab_file = os.path.join(lab_path, file.replace("leftImg8bit", "gtFine_color"))
-        #         filenames.append((img_file, lab_file))
-        #
-        # if not(self._debug_samples):
-        #     print("Cityscapes: shuffling dataset")
-        #     random.shuffle(filenames)
-        #
-        # print('Cityscapes: ' + which_set + ' ' + str(len(filenames)) + ' files')
-        #
-        # self._data[which_set] = filenames
+        if not self._debug_samples:
+            self.shuffle(which_set)
+
+    def normalize(self, rgb, target_size, equalize_hist=False):
+        norm = super(CityscapesGenerator, self).normalize(rgb, target_size, equalize_hist)
+        norm -= self._config['mean']
+        norm /= self._config['std']
+
+        import numpy as np
+        return norm
 
 
 if __name__ == '__main__':
@@ -113,6 +105,8 @@ if __name__ == '__main__':
     # target_size = 288, 480
     target_size = 256, 512
     # target_size = 1024, 2048  # orig size
+
+    import matplotlib.pyplot as plt
 
     for imgBatch, labelBatch in datagen.flow('val', batch_size, target_size):
         print(len(imgBatch))

@@ -1,6 +1,7 @@
 # ###############learning rate scheduler####################
 import json
 
+import keras.backend as K
 import numpy as np
 from keras import callbacks
 from keras.callbacks import LearningRateScheduler, TensorBoard
@@ -48,7 +49,7 @@ def lr_scheduler(epochs, lr_base, lr_power):
     return LearningRateScheduler(lr_scheduler)
 
 
-def tensorboard(save_path, histogram_freq=0):
+def tensorboard(save_path, batch_size, histogram_freq=0):
     """
     Tensorboard callback
     :param run:
@@ -58,10 +59,43 @@ def tensorboard(save_path, histogram_freq=0):
     """
     tensorboard = TensorBoard(
         log_dir=save_path,
+        batch_size=batch_size,
         histogram_freq=histogram_freq,
+        write_grads=True,
+        write_images=True,
         write_graph=True
     )
     return tensorboard
+
+
+import tensorflow as tf
+
+
+class CustomTensorBoard(TensorBoard):
+    def __init__(self, proper_model, log_dir, batch_size, histogram_freq=0):
+        self._proper_model = proper_model
+        if histogram_freq > 0:
+            print("-- Using tensorboard with histograms")
+
+        super(CustomTensorBoard, self).__init__(
+            log_dir,
+            histogram_freq=histogram_freq,
+            batch_size=batch_size,
+            write_graph=True,
+            write_grads=True,
+            write_images=True,
+        )
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        # TODO not working on multi gpus :(
+        # decay = self._proper_model.optimizer.decay
+        # iterations = self._proper_model.optimizer.iterations
+        # lr_with_decay = self._proper_model.optimizer.lr / (1. + decay * K.cast(iterations, K.dtype(decay)))
+        # lr_value = K.eval(lr_with_decay)
+        # print("--- LR:", lr_value)
+        # logs.update({"learning_rate": np.array([lr_value])})
+        super(CustomTensorBoard, self).on_epoch_end(epoch, logs)
 
 
 class TensorBoardWrapper(TensorBoard):
@@ -109,6 +143,13 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
     def get_model_file_name(model_name, is_debug):
         return './checkpoint/' + model_name + ('_d' if is_debug else '') + '.last_epoch.json'
 
+    # def print_learning_rate(self):
+    #     lr = self.model.optimizer.lr
+    #     decay = self.model.optimizer.decay
+    #     iterations = self.model.optimizer.iterations
+    #     lr_with_decay = lr / (1. + decay * K.cast(iterations, K.dtype(decay)))
+    #     print("LR: %f" % K.eval(lr_with_decay))
+
     def on_epoch_end(self, epoch, logs=None):
         """
         Saves last successfully trained epoch
@@ -116,6 +157,7 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
         :param logs:
         :return:
         """
+
         with open(self.get_model_file_name(self.model_name, self.is_debug), 'w') as fp:
             # saves epoch + 1 (so that this is starting next time)
             json.dump({

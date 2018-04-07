@@ -104,25 +104,34 @@ class BaseModel:
 
         self.k.save_weights(to_file + '_%d_finished.h5' % last_epoch)
 
+    def _compile_debug(self, m_metrics):
+        self._compile_release(m_metrics)
+        # self._model.compile(
+        #     loss=keras.losses.categorical_crossentropy,
+        #     optimizer=optimizers.SGD(),
+        #     metrics=m_metrics
+        # )
+
+    def _compile_release(self, m_metrics):
+        self._model.compile(
+            loss=keras.losses.categorical_crossentropy,
+            optimizer=optimizers.Adam(),
+            metrics=m_metrics
+        )
+
     def compile(self):
         import metrics
 
         m_metrics = [
-            metrics.dice_coef,
+            # metrics.dice_coef,
             metrics.precision,
+            metrics.recall,
+            metrics.f1_score,
             keras.metrics.categorical_accuracy,
             metrics.mean_iou
         ]
 
         if self.is_debug:
-            self._model.compile(
-                loss=keras.losses.categorical_crossentropy,
-                optimizer=optimizers.SGD(lr=0.0001, momentum=0.9),
-                metrics=m_metrics
-            )
+            self._compile_debug(m_metrics)
         else:
-            self._model.compile(
-                loss=keras.losses.categorical_crossentropy,
-                optimizer=optimizers.Adam(),
-                metrics=m_metrics
-            )
+            self._compile_release(m_metrics)
