@@ -301,6 +301,9 @@ class ICNet(BaseModel):
             ]
         }
 
+    def optimizer_params(self):
+        return {'lr': 0.0002, 'decay': 0.0991}
+
     def optimizer(self):
         # return optimizers.Adam(lr=0.0001) # baseline_b6_lr0.0001
         # return optimizers.Adam(decay=0.00006)
@@ -310,7 +313,10 @@ class ICNet(BaseModel):
         # return optimizers.Adam(lr=0.0001, decay=0.001)
         # return optimizers.Adam(lr=0.00025, decay=0.0099)
         # return optimizers.Adam(lr=0.0001, decay=0.003) # TODO: 2nd best
-        return optimizers.Adam(lr=0.0002, decay=0.099)  # TODO this is the best
+        # return optimizers.Adam(lr=0.0002, decay=0.099)  # TODO this is the best
+
+        params = self.optimizer_params()
+        return optimizers.Adam(lr=params['lr'], decay=params['decay'])
         # return optimizers.SGD(lr=0.001, momentum=0.9,)
 
     def compile(self):

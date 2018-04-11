@@ -116,12 +116,15 @@ class BaseModel:
             metrics.mean_iou
         ]
 
+    def optimizer_params(self):
+        return {'lr': 0.0002, 'decay': 0.0991}
+
     def params(self):
         return {
             'optimizer': {
                 'name': type(self.optimizer()).__name__,
-                # 'lr': self.optimizer().lr.value(),
-                # 'decay': self.optimizer().decay.value()
+                'lr': self.optimizer_params()['lr'],
+                'decay': self.optimizer_params()['decay'],
             }
         }
 
