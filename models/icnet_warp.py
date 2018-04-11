@@ -1,4 +1,5 @@
 import keras
+import keras.backend as K
 import tensorflow as tf
 from keras.engine import Layer
 from keras.layers import Activation, BatchNormalization, concatenate
@@ -12,8 +13,6 @@ from icnet import ICNet
 from layers import BilinearUpSampling2D
 from layers import tf_warp
 
-import keras.backend as K
-
 
 class FlowFilter(Layer):
     def __init__(self, init_value=1.0, **kwargs):
@@ -21,19 +20,39 @@ class FlowFilter(Layer):
         super(FlowFilter, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.fil = self.add_weight(name='filter',
-                                   shape=input_shape,
-                                   initializer=keras.initializers.Constant(self.init_value),
-                                   trainable=True)
+        print(input_shape)
+
+        self.fil = self.add_weight(
+            name='filter',
+            # shape=(1,),
+            shape=input_shape,
+            initializer=keras.initializers.Constant(self.init_value),
+            trainable=True,
+            dtype='float32'
+        )
 
         super(FlowFilter, self).build(input_shape)
 
     def call(self, inputs, **kwargs):
-        # K.
-        pass
+        return K.tf.multiply(inputs, self.fil, name='flow_masked')
+        # return K.tf.where(K.tf.greater(K.tf.abs(inputs), self.fil), inputs, inputs)
 
 
-# return K.tf.where(K.tf.greater(K.tf.abs(inputs), self.fil), inputs, inputs)
+class Warp(Lambda):
+    @staticmethod
+    def _warp(x):
+        img = x[0]
+        flow = x[1]
+        # flow = FlowFilter()(flow)
+
+        out_size = img.get_shape().as_list()[1:3]
+        resized_flow = Lambda(lambda image: tf.image.resize_bilinear(image, out_size))(flow)
+        out = tf_warp(img, resized_flow, out_size)
+        out = BatchNormalization()(out)
+        return out
+
+    def __init__(self, **kwargs):
+        super(Warp, self).__init__(self._warp, **kwargs)
 
 
 class ICNetWarp(ICNet):
@@ -47,17 +66,6 @@ class ICNetWarp(ICNet):
         x = BatchNormalization()(x)
         x = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
         return x
-
-    def warp(self, x):
-        img = x[0]
-        flow = x[1]
-        # flow = FlowFilter()(flow)
-
-        out_size = img.get_shape().as_list()[1:3]
-        resized_flow = Lambda(lambda image: tf.image.resize_bilinear(image, out_size))(flow)
-        out = tf_warp(img, resized_flow, out_size)
-        out = BatchNormalization()(out)
-        return out
 
     def _create_model(self):
         img_old = Input(shape=self.target_size + (3,), name='data_old')
@@ -97,7 +105,7 @@ class ICNetWarp(ICNet):
         y = self.block_0(x)
         y_old = self.block_0(img_old, prefix='old_')
 
-        warped0 = Lambda(self.warp, name="warp1")([y_old, transformed_flow])
+        warped0 = Warp(name="warp1")([y_old, transformed_flow])
 
         y = Add(name='sub12_sum')([y, y_, warped0])
         y = Activation('relu', name='sub12_sum/relu')(y)

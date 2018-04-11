@@ -24,6 +24,8 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
             flip_enabled=flip_enabled
         )
 
+    reverse_flow = False
+
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
         i = 0
@@ -48,7 +50,11 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
                 img = self._prep_img(type, img_old_path, target_size, apply_flip)
                 img2 = self._prep_img(type, img_new_path, target_size, apply_flip)
 
-                flow = self.calc_optical_flow(img, img2, 'dis')
+                if self.reverse_flow:
+                    flow = self.calc_optical_flow(img2, img, 'dis')
+                else:
+                    flow = self.calc_optical_flow(img, img2, 'dis')
+
                 flow_arr.append(flow)
                 in_arr[2].append(flow)
 
@@ -61,7 +67,7 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
                 input2_arr.append(input2)
 
                 if self._flow_with_diff:
-                    diff = input2 - input1
+                    diff = (input1 - input2) if self.reverse_flow else (input2 - input1)
                     in_arr[3].append(diff)
                     diff_arr.append(diff)
 
@@ -131,7 +137,7 @@ if __name__ == '__main__':
         right_img = imgBatch[1][0]
         optical_flow = imgBatch[2][0]
         diff = imgBatch[3][0]
-        label = labelBatch[0][0]
+        label = labelBatch[0]
 
         flow_bgr = datagen.flow_to_bgr(optical_flow, target_size)
 

@@ -18,25 +18,6 @@ from layers import BilinearUpSampling2D
 
 class ICNet(BaseModel):
 
-    def reduce(self, y_, filters, prefix='conv3_3'):
-        """
-        TODO NOT WORKING
-        :param y_:
-        :param filters:
-        :param prefix:
-        :return:
-        """
-        y = Conv2D(filters, 1, activation='relu', name=(prefix + '_1x1_reduce'))(y_)
-        y = BatchNormalization(name=(prefix + '_1x1_reduce_bn'))(y)
-        y = ZeroPadding2D(name=prefix + 'padding6')(y)
-        y = Conv2D(filters, 3, activation='relu', name=(prefix + '_3x3'))(y)
-        y = BatchNormalization(name=(prefix + '_3x3_bn'))(y)
-        y = Conv2D(filters * 4, 1, name=(prefix + '_1x1_increase'))(y)
-        y = BatchNormalization(name=(prefix + '_1x1_increase_bn'))(y)
-        y = Add(name=prefix)([y, y_])
-        y_ = Activation('relu', name=(prefix + '/relu'))(y)
-        return y_
-
     def branch_half(self, x):
         y = Lambda(lambda x: tf.image.resize_bilinear(x, size=(int(x.shape[1]) // 2, int(x.shape[2]) // 2)), name='data_sub2')(x)
         y = Conv2D(32, 3, strides=2, padding='same', activation='relu', name='conv1_1_3x3_s2')(y)
@@ -49,8 +30,6 @@ class ICNet(BaseModel):
 
         y = Conv2D(128, 1, name='conv2_1_1x1_proj')(y_)
         y = BatchNormalization(name='conv2_1_1x1_proj_bn')(y)
-
-        # y_ = self.reduce(y_, 32, prefix='conv2_1')
 
         y_ = Conv2D(32, 1, activation='relu', name='conv2_1_1x1_reduce')(y_)
         y_ = BatchNormalization(name='conv2_1_1x1_reduce_bn')(y_)
@@ -107,8 +86,6 @@ class ICNet(BaseModel):
         y = BatchNormalization(name='conv3_2_1x1_increase_bn')(y)
         y = Add(name='conv3_2')([y, y_])
         y_ = Activation('relu', name='conv3_2/relu')(y)
-
-        # y_ = self.reduce(y_, 64, prefix='conv3_1')
 
         y = Conv2D(64, 1, activation='relu', name='conv3_3_1x1_reduce')(y_)
         y = BatchNormalization(name='conv3_3_1x1_reduce_bn')(y)
@@ -241,7 +218,6 @@ class ICNet(BaseModel):
         y = BatchNormalization(name='conv5_4_k1_bn')(y)
 
         aux_1 = BilinearUpSampling2D(name='conv5_4_interp')(y)
-        # aux_1 = Lambda(lambda x: tf.image.resize_bilinear(x, size=(int(x.shape[1]) * 2, int(x.shape[2]) * 2)), name='conv5_4_interp')(y)
         return aux_1
 
     def block_0(self, x, prefix=''):
@@ -334,7 +310,7 @@ class ICNet(BaseModel):
         # return optimizers.Adam(lr=0.0001, decay=0.001)
         # return optimizers.Adam(lr=0.00025, decay=0.0099)
         # return optimizers.Adam(lr=0.0001, decay=0.003) # TODO: 2nd best
-        return optimizers.Adam(lr=0.0002, decay=0.099) # TODO this is the best
+        return optimizers.Adam(lr=0.0002, decay=0.099)  # TODO this is the best
         # return optimizers.SGD(lr=0.001, momentum=0.9,)
 
     def compile(self):

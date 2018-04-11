@@ -17,7 +17,7 @@ class BaseDataGenerator:
 
     def __init__(self, dataset_path, debug_samples=0, gt_sub=[4, 8, 16], flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
         self._debug_samples = debug_samples
-        self._is_debug = debug_samples > 0
+        self.is_augment = debug_samples > 50
         self._data = {'train': [], 'val': [], 'test': []}
         self.gt_sub = gt_sub
         self.dataset_path = dataset_path
@@ -180,7 +180,7 @@ class BaseDataGenerator:
     def _prep_img(self, type, img_path, target_size, apply_flip=False):
         img = cv2.resize(self._load_img(img_path), target_size[::-1])
 
-        if not self._is_debug and type == 'train':
+        if not self.is_augment and type == 'train':
             if self.brightness:
                 factor = 1.0 + abs(random.gauss(mu=0.0, sigma=self.brightness))
                 if random.randint(0, 1):
@@ -225,7 +225,7 @@ class BaseDataGenerator:
     def _prep_gt(self, type, label_path, target_size, apply_flip=False):
         seg_img = self._load_img(label_path)
 
-        if not self._is_debug and type == 'train':
+        if not self.is_augment and type == 'train':
             if self.flip_enabled and apply_flip:
                 seg_img = cv2.flip(seg_img, 1)
 
