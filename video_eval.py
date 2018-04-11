@@ -92,8 +92,7 @@ if __name__ == '__main__':
 
         parser.add_argument(
             '-o', '--output',
-            help='Output file',
-            default=None
+            help='Output file'
         )
 
         args = parser.parse_args()
@@ -139,8 +138,9 @@ if __name__ == '__main__':
     # model_left.k.load_weights(config.weights_path() + 'city/rel/SegNet/normal_eq_hist.h5')
     # model_left.compile()
 
-    model_left = MobileUNetWarp(config.target_size(), datagen.n_classes)
-    model_left.k.load_weights(config.weights_path() + 'city/rel/MobileUNetWarp/mob_unet_b6_warp1_spat0.2.h5')
+    model_left = MobileUNetWarp2(config.target_size(), datagen.n_classes)
+    # model_left.k.load_weights(config.weights_path() + 'city/rel/MobileUNetWarpmob_unet_b6_warp1_spat0.2.h5')
+    model_left.k.load_weights(config.weights_path() + 'city/rel/MobileUNetWarp2/omg_po_ranu.h5')
     model_left.compile()
 
     model_right = SegNetWarpDiff123(config.target_size(), datagen.n_classes)

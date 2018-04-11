@@ -5,7 +5,7 @@ from keras import Input
 from keras.applications import mobilenet
 from keras.applications.mobilenet import DepthwiseConv2D
 from keras.engine import Layer
-from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Lambda, SpatialDropout2D, Add, regularizers
+from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Lambda, Add
 from keras.models import Model
 
 from base_model import BaseModel
@@ -14,12 +14,20 @@ from layers import tf_warp
 
 
 class FlowFilter(Layer):
+    def __init__(self, init_value=1.0, **kwargs):
+        self.init_value = init_value
+        super(FlowFilter, self).__init__(**kwargs)
+
     def build(self, input_shape):
+        self.fil = self.add_weight(name='filter',
+                                   shape=(1,),
+                                   initializer=keras.initializers.Constant(self.init_value),
+                                   trainable=True)
+
         super(FlowFilter, self).build(input_shape)
 
     def call(self, inputs, **kwargs):
-        fil = tf.Variable(initial_value=1.0)
-        return tf.where(tf.greater(tf.abs(inputs), fil), inputs, inputs)
+        return K.tf.where(K.tf.greater(K.tf.abs(inputs), self.fil), inputs, inputs)
 
 
 class MobileUNetWarp(BaseModel):
@@ -36,6 +44,7 @@ class MobileUNetWarp(BaseModel):
     custom_objects = {
         'relu6': mobilenet.relu6,
         'DepthwiseConv2D': mobilenet.DepthwiseConv2D,
+
         'BilinearUpSampling2D': BilinearUpSampling2D,
     }
 
@@ -167,8 +176,6 @@ class MobileUNetWarp(BaseModel):
         return Activation(mobilenet.relu6, name='%sconv_pw_%d_relu' % (prefix, block_id))(x)
 
     def netwarp_module(self, img_old, img_new, flo, diff):
-        # filter_flo = FlowFilter()(flo)
-
         x = concatenate([img_old, img_new, flo, diff])
         x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
         x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
@@ -222,6 +229,7 @@ class MobileUNetWarp(BaseModel):
 
         # if not self.is_debug:
         #     b13 = SpatialDropout2D(0.1)(b13)
+        # b13 = Dropout(0.2)
 
         return b00, b01, b03, b05, b11, b13
 
@@ -372,6 +380,6 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = MobileUNetWarp0(target_size, 32)
+    model = MobileUNetWarp2(target_size, 32)
     print(model.summary())
     keras.utils.plot_model(model.k, model.name + '.png', show_shapes=True, show_layer_names=True)

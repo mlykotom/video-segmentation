@@ -1,8 +1,6 @@
 # ###############learning rate scheduler####################
 import json
 
-import keras.backend as K
-import numpy as np
 from keras import callbacks
 from keras.callbacks import LearningRateScheduler, TensorBoard
 
@@ -49,26 +47,8 @@ def lr_scheduler(epochs, lr_base, lr_power):
     return LearningRateScheduler(lr_scheduler)
 
 
-def tensorboard(save_path, batch_size, histogram_freq=0):
-    """
-    Tensorboard callback
-    :param run:
-    :param save_path:
-    :param histogram_freq:
-    :return:
-    """
-    tensorboard = TensorBoard(
-        log_dir=save_path,
-        batch_size=batch_size,
-        histogram_freq=histogram_freq,
-        write_grads=True,
-        write_images=True,
-        write_graph=True
-    )
-    return tensorboard
-
-
-import tensorflow as tf
+import keras.backend as K
+import numpy as np
 
 
 class CustomTensorBoard(TensorBoard):
@@ -88,43 +68,54 @@ class CustomTensorBoard(TensorBoard):
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
+
+        if 'out_mean_iou' in logs:
+            out_mean_iou = logs['out_mean_iou']
+            del logs['out_mean_iou']
+            val_out_mean_iou = logs['val_out_mean_iou']
+            del logs['val_out_mean_iou']
+
+            logs.update({"mean_iou": out_mean_iou, "val_mean_iou": val_out_mean_iou})
+
         # TODO not working on multi gpus :(
-        # decay = self._proper_model.optimizer.decay
-        # iterations = self._proper_model.optimizer.iterations
-        # lr_with_decay = self._proper_model.optimizer.lr / (1. + decay * K.cast(iterations, K.dtype(decay)))
-        # lr_value = K.eval(lr_with_decay)
-        # print("--- LR:", lr_value)
-        # logs.update({"learning_rate": np.array([lr_value])})
+        decay = self._proper_model.optimizer.decay
+        iterations = self._proper_model.optimizer.iterations
+        lr_with_decay = self._proper_model.optimizer.lr / (1. + decay * K.cast(iterations, K.dtype(decay)))
+        lr_value = K.eval(lr_with_decay)
+        print("--- LR:", lr_value)
+        logs.update({"learning_rate": np.array([lr_value])})
         super(CustomTensorBoard, self).on_epoch_end(epoch, logs)
 
 
-class TensorBoardWrapper(TensorBoard):
-    """
-    # TODO not working :(
-    Sets the self.validation_data property for use with TensorBoard callback.
-    """
-
-    def __init__(self, batch_gen, nb_steps, **kwargs):
-        super(TensorBoardWrapper, self).__init__(**kwargs)
-        self.batch_gen = batch_gen  # The generator.
-        self.nb_steps = nb_steps  # Number of times to call next() on the generator.
-
-    def on_epoch_end(self, epoch, logs=None):
-        # Fill in the `validation_data` property. Obviously this is specific to how your generator works.
-        # Below is an example that yields images and classification tags.
-        # After it's filled in, the regular on_epoch_end method has access to the validation_data.
-        imgs, tags = None, None
-        for s in range(self.nb_steps):
-            ib, tb = next(self.batch_gen)
-            # print("shapes", ib.shape, tb.shape)
-
-            if imgs is None and tags is None:
-                imgs = np.zeros(((self.nb_steps * ib.shape[0],) + ib.shape[1:]), dtype=np.float32)
-                tags = np.zeros(((self.nb_steps * tb.shape[0],) + tb.shape[1:]), dtype=np.uint8)
-            imgs[s * ib.shape[0]:(s + 1) * ib.shape[0]] = ib
-            tags[s * tb.shape[0]:(s + 1) * tb.shape[0]] = tb
-        self.validation_data = [imgs, tags, np.ones(imgs.shape[0]), 0.0]
-        return super(TensorBoardWrapper, self).on_epoch_end(epoch, logs)
+# class Visualization(Callback):
+#     def __init__(self, resize_shape=(640, 320), batch_steps=10, n_gpu=1):
+#         super(Visualization, self).__init__()
+#         self.resize_shape = resize_shape
+#         self.batch_steps = batch_steps
+#         self.n_gpu = n_gpu
+#         self.counter = 0
+#
+#         # TODO: Remove this lazy hardcoded paths
+#         self.test_images_list = glob.glob('datasets/mapillary/testing/images/*')
+#         with open('datasets/mapillary/config.json') as config_file:
+#             config = json.load(config_file)
+#         self.labels = config['labels']
+#
+#     def on_batch_end(self, batch, logs={}):
+#         self.counter += 1
+#
+#         if self.counter == self.batch_steps:
+#             self.counter = 0
+#
+#             test_image = cv2.resize(cv2.imread(random.choice(self.test_images_list), 1), self.resize_shape)
+#
+#             inputs = [test_image] * self.n_gpu
+#             output, _, _ = self.model.predict(np.array(inputs), batch_size=self.n_gpu)
+#
+#             cv2.imshow('input', test_image)
+#             cv2.waitKey(1)
+#             cv2.imshow('output', apply_color_map(np.argmax(output[0], axis=-1), self.labels))
+#             cv2.waitKey(1)
 
 
 class SaveLastTrainedEpochCallback(callbacks.Callback):

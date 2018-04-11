@@ -1,18 +1,15 @@
 import keras
 import keras.backend as K
+import tensorflow as tf
 from keras import Input, optimizers
 from keras.applications import mobilenet
 from keras.applications.mobilenet import DepthwiseConv2D
-from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Dropout, \
-    MaxPooling2D, Lambda, SpatialDropout2D, Add
+from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Lambda, SpatialDropout2D, Add
 from keras.models import Model
 
 from base_model import BaseModel
 from layers import BilinearUpSampling2D
-
 from layers import tf_warp
-
-import tensorflow as tf
 
 
 # TODO Mobilenet v2? https://github.com/xiaochus/MobileNetV2/blob/master/mobilenet_v2.py
@@ -314,12 +311,8 @@ class MobileUNetWarp(BaseModel):
         'BilinearUpSampling2D': BilinearUpSampling2D,
     }
 
-    def _compile_release(self, m_metrics):
-        self._model.compile(
-            loss=keras.losses.categorical_crossentropy,
-            optimizer=optimizers.Adam(decay=0.0001),
-            metrics=m_metrics
-        )
+    def optimizer(self):
+        return optimizers.Adam(decay=0.0001)
 
 
 if __name__ == '__main__':

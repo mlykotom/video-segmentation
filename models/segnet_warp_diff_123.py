@@ -75,12 +75,8 @@ class SegNetWarpDiff123(SegNetWarpDiff):
 
         return model
 
-    def _compile_release(self, m_metrics):
-        self._model.compile(
-            loss=keras.losses.categorical_crossentropy,
-            optimizer=optimizers.Adam(decay=0.00001),
-            metrics=m_metrics
-        )
+    def optimizer(self):
+        return optimizers.Adam(decay=0.00001)
 
 
 if __name__ == '__main__':

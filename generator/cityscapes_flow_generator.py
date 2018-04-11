@@ -1,4 +1,5 @@
 import os
+import random
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
 os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -13,56 +14,81 @@ from cityscapes_generator import CityscapesGenerator
 
 
 class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flow_with_diff=False, flip_enabled=True):
+    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flow_with_diff=False, flip_enabled=False):
         self._flow_with_diff = flow_with_diff
-        self.flip_enabled = flip_enabled
-        super(CityscapesFlowGenerator, self).__init__(dataset_path, debug_samples, how_many_prev, prev_skip)
-
-    def steps_per_epoch(self, type, batch_size, gpu_count=1):
-        steps = super(CityscapesFlowGenerator, self).steps_per_epoch(type, batch_size, gpu_count)
-        return (steps * 2) if self.flip_enabled else steps
+        super(CityscapesFlowGenerator, self).__init__(
+            dataset_path=dataset_path,
+            debug_samples=debug_samples,
+            how_many_prev=how_many_prev,
+            prev_skip=prev_skip,
+            flip_enabled=flip_enabled
+        )
 
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
         i = 0
 
         while True:
+            in_arr = [[]] * (4 if self._flow_with_diff else 3)
+            out_arr = [[]] * len(self.gt_sub)
+            Y = []
+            Y2 = []
+            Y3 = []
+
             input1_arr = []
             input2_arr = []
             flow_arr = []
             diff_arr = []
-            out_arr = []
 
             for _ in range(batch_size):
                 (img_old_path, img_new_path), label_path = next(zipped)
 
-                img = cv2.resize(self._load_img(img_old_path), target_size[::-1])
-                img2 = cv2.resize(self._load_img(img_new_path), target_size[::-1])
+                apply_flip = random.randint(0, 1)
 
-                if self.flip_enabled and i % 2 == 0:
-                    img = cv2.flip(img, 1)
-                    img2 = cv2.flip(img2, 1)
+                img = self._prep_img(type, img_old_path, target_size, apply_flip)
+                img2 = self._prep_img(type, img_new_path, target_size, apply_flip)
 
                 flow = self.calc_optical_flow(img, img2, 'dis')
-                # flow[..., 0] = np.where(np.abs(flow[..., 0]) > 4, flow[..., 0], -1)
-                # flow = np.where(np.abs(flow) > 4, flow, -1)
+                flow_arr.append(flow)
+                in_arr[2].append(flow)
 
                 input1 = self.normalize(img, target_size=None)
-                input2 = self.normalize(img2, target_size=None)
-                diff = input2 - input1
-
+                in_arr[0].append(input1)
                 input1_arr.append(input1)
+
+                input2 = self.normalize(img2, target_size=None)
+                in_arr[1].append(input2)
                 input2_arr.append(input2)
-                diff_arr.append(diff)
-                flow_arr.append(flow)
 
-                seg_tensor = cv2.imread(label_path)
+                if self._flow_with_diff:
+                    diff = input2 - input1
+                    in_arr[3].append(diff)
+                    diff_arr.append(diff)
 
-                if self.flip_enabled and i % 2 == 0:
-                    seg_tensor = cv2.flip(seg_tensor, 1)
+                seg_img = self._prep_gt(type, label_path, target_size, apply_flip)
 
-                seg_tensor = self.one_hot_encoding(seg_tensor, target_size)
-                out_arr.append(seg_tensor)
+                seg_tensor = self.one_hot_encoding(seg_img, tuple(a // 4 for a in target_size))  # target_size)
+                Y.append(seg_tensor)
+
+                seg_tensor2 = self.one_hot_encoding(seg_img, tuple(a // 8 for a in target_size))
+                Y2.append(seg_tensor2)
+
+                seg_tensor3 = self.one_hot_encoding(seg_img, tuple(a // 16 for a in target_size))
+                Y3.append(seg_tensor3)
+                #
+                # if self.gt_sub is None:
+                #     seg_tensor = self.one_hot_encoding(seg_img, target_size)
+                #     out_arr[i].append(seg_tensor)
+                # else:
+                #     for i, sub in enumerate(self.gt_sub):
+                #         subsampled_target_size = tuple(a // sub for a in target_size)
+                #         seg_tensor = self.one_hot_encoding(seg_img, subsampled_target_size)
+                #         out_arr[i].append(seg_tensor)
+
+            i += 1
+
+            # x = [np.asarray(j) for j in in_arr]
+            # y = [np.array(j) for j in out_arr]
 
             if self._flow_with_diff:
                 x = [
@@ -78,9 +104,7 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
                     np.asarray(flow_arr)
                 ]
 
-            y = np.array(out_arr)
-
-            i += 1
+            y = [np.array(Y), np.array(Y2), np.array(Y3)]
             yield x, y
 
 
@@ -107,13 +131,13 @@ if __name__ == '__main__':
         right_img = imgBatch[1][0]
         optical_flow = imgBatch[2][0]
         diff = imgBatch[3][0]
-        label = labelBatch[0]
+        label = labelBatch[0][0]
 
         flow_bgr = datagen.flow_to_bgr(optical_flow, target_size)
 
         print(left_img.dtype, left_img.shape, right_img.shape, label.shape, diff.shape)
 
-        colored_class_image = datagen.one_hot_to_bgr(label, target_size, datagen.n_classes, datagen.labels)
+        colored_class_image = datagen.one_hot_to_bgr(label, tuple(a // 4 for a in target_size), datagen.n_classes, datagen.labels)
 
         winner = datagen.calcWarp(left_img, optical_flow, target_size)
         cv2.imshow("winner", winner)

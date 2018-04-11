@@ -19,6 +19,10 @@ if model == 'segnet_warp_diff':
     model.k.load_weights('/home/mlyko/weights/city/SegNetWarpDiff/diff_p0_w123_s04_aug.h5')
     # model.k.load_weights('/home/mlyko/weights/city/SegNetWarpDiff/diff_p0_w123_s04_2.h5')
     eval_batch_size = 5
+
+elif model == 'icnet':
+    raise NotImplementedError("Unknown model")
+    # eval_batch_size = 5
 else:
     raise NotImplementedError("Unknown model")
 

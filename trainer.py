@@ -1,7 +1,9 @@
 import json
 
+import losswise
 from keras.callbacks import ModelCheckpoint
-import os
+from losswise.libs import LosswiseKerasCallback
+
 import config
 import metrics
 import utils
@@ -9,13 +11,18 @@ from callbacks import SaveLastTrainedEpochCallback, CustomTensorBoard
 from generator import *
 from models import *
 
-because_os_gets_dismissed = os.name
 
 class Trainer:
     train_callbacks = []
 
-    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10):
+    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=20):
         is_debug = debug_samples > 0
+
+        if is_debug:
+            losswise.set_api_key('EY32N390I')  # api_key for 'mlykotom/dp_debug'
+        else:
+            losswise.set_api_key('VY1G5AGSO')  # api_key for 'mlykotom/dp_release'
+
         self.debug_samples = debug_samples
         self.is_debug = is_debug
         self.n_gpu = n_gpu
@@ -54,9 +61,16 @@ class Trainer:
         elif model_name == 'mobile_unet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = MobileUNet(target_size, self.datagen.n_classes, is_debug=is_debug)
+        elif model_name == 'icnet':
+            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
+            model = ICNet(target_size, self.datagen.n_classes, is_debug=is_debug)
+        elif model_name == 'icnet_warp':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
+                                                   flow_with_diff=True, flip_enabled=not is_debug)
+            model = ICNetWarp(target_size, self.datagen.n_classes, is_debug=is_debug)
         else:
             self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
-                                                   flow_with_diff=True)
+                                                   flow_with_diff=True, flip_enabled=not is_debug)
             model = MobileUNetWarp2(target_size, self.datagen.n_classes, is_debug=is_debug)
 
         # -------------  set multi gpu model
@@ -76,6 +90,8 @@ class Trainer:
         return device_lib.list_local_devices()
 
     def get_run_path(self, run_name, prefix_dir='', name_postfix=''):
+        import os
+
         """
         #TODO when directory already exist, use new with prefix _2 or _3 ,...
         :param run_name:
@@ -169,11 +185,6 @@ class Trainer:
         return restart_epoch, restart_run_name, batch_size
 
     def prepare_callbacks(self, run_name, epochs, use_validation_data=False):
-        # ------------- lr scheduler
-        # lr_base = 0.01 * (float(self.batch_size) / 16)
-        # lr_power = 0.9
-        # self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
-
         # ------------- tensorboard
         # TODO copy output folder after each epoch to remote server
 
@@ -200,18 +211,24 @@ class Trainer:
         self.train_callbacks.append(checkpoint)
 
         # ------------- early stopping
-        if not self.is_debug:
-            early_stopping = keras.callbacks.EarlyStopping(
-                monitor='val_loss',
-                min_delta=0,
-                patience=self._early_stopping,
-                verbose=1,
-                mode='min'
-            )
+        # TODO turn on early stopping
+        # if not self.is_debug:
+        #     early_stopping = keras.callbacks.EarlyStopping(
+        #         monitor='val_loss',
+        #         min_delta=0,
+        #         patience=self._early_stopping,
+        #         verbose=1,
+        #         mode='min'
+        #     )
+        #
+        #     self.train_callbacks.append(early_stopping)
 
-            self.train_callbacks.append(early_stopping)
+        # ------------- lr scheduler
+        # lr_base = 0.001  # self.model.optimizer().lr  # * (float(self.batch_size) / 16)
+        # lr_power = 0.9
+        # self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
 
-    def fit_model(self, run_name='', epochs=100, restart_training=False):
+    def fit_model(self, run_name, epochs, restart_training=False):
         restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
         if restart_run_name is not None:
             run_name = restart_run_name
@@ -230,8 +247,32 @@ class Trainer:
         val_generator = self.datagen.flow('val', batch_size, self.target_size)
         val_steps = self.datagen.steps_per_epoch('val', batch_size)
 
-        shuffler = keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: self.datagen.shuffle('train'))
-        self.train_callbacks.append(shuffler)
+        if not self.is_debug:
+            # -- shuffle dataset after every epoch
+            shuffler = keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: self.datagen.shuffle('train'))
+            self.train_callbacks.append(shuffler)
+
+        # ------------- losswise dashboard
+
+        losswise_params = {
+            'batch': self.batch_size,
+            'model': self.model.name,
+            'train_data': {
+                'length': self.datagen.data_length('train'),
+                'steps': train_steps,
+            },
+            'epochs': epochs,
+            'n_gpus': self.n_gpu,
+        }
+
+        losswise_params.update(self.model.params())
+
+        losswise_callback = LosswiseKerasCallback(
+            tag=run_name,
+            params=losswise_params
+        )
+        self.train_callbacks.append(losswise_callback)
+
         self.prepare_callbacks(run_name, epochs, use_validation_data=val_data is not None)
 
         self.model.k.fit_generator(

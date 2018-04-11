@@ -11,7 +11,7 @@ class BaseModel:
     """dictionary of custom objects (as per keras definition)"""
     custom_objects = {}
 
-    def __init__(self, target_size, n_classes, is_debug=False):
+    def __init__(self, target_size, n_classes, is_debug=False, for_training=True):
         """
         :param tuple target_size: (height, width)
         :param int n_classes: number of classes
@@ -20,7 +20,7 @@ class BaseModel:
         self.target_size = target_size
         self.n_classes = n_classes
         self.is_debug = is_debug
-
+        self.training_phase = for_training
         self._model = self._create_model()
 
     def make_multi_gpu(self, n_gpu):
@@ -84,14 +84,15 @@ class BaseModel:
         :param str to_file:
         """
         if to_file is None:
-            to_file = 'models/model_%s_%dx%d.png' % (self.name, self.target_size[0], self.target_size[1])
+            to_file = 'plot/model_%s_%dx%d.png' % (self.name, self.target_size[0], self.target_size[1])
+            print("Plotting to file " + to_file)
 
-            keras.utils.plot_model(
-                self.k,
-                to_file=to_file,
-                show_layer_names=True,
-                show_shapes=True
-            )
+        keras.utils.plot_model(
+            self.k,
+            to_file=to_file,
+            show_layer_names=True,
+            show_shapes=True
+        )
 
     def save_final(self, to_file, last_epoch):
         """
@@ -104,26 +105,10 @@ class BaseModel:
 
         self.k.save_weights(to_file + '_%d_finished.h5' % last_epoch)
 
-    def _compile_debug(self, m_metrics):
-        self._compile_release(m_metrics)
-        # self._model.compile(
-        #     loss=keras.losses.categorical_crossentropy,
-        #     optimizer=optimizers.SGD(),
-        #     metrics=m_metrics
-        # )
-
-    def _compile_release(self, m_metrics):
-        self._model.compile(
-            loss=keras.losses.categorical_crossentropy,
-            optimizer=optimizers.Adam(),
-            metrics=m_metrics
-        )
-
-    def compile(self):
+    def metrics(self):
         import metrics
 
-        m_metrics = [
-            # metrics.dice_coef,
+        return [
             metrics.precision,
             metrics.recall,
             metrics.f1_score,
@@ -131,7 +116,21 @@ class BaseModel:
             metrics.mean_iou
         ]
 
-        if self.is_debug:
-            self._compile_debug(m_metrics)
-        else:
-            self._compile_release(m_metrics)
+    def params(self):
+        return {
+            'optimizer': {
+                'name': type(self.optimizer()).__name__,
+                # 'lr': self.optimizer().lr.value(),
+                # 'decay': self.optimizer().decay.value()
+            }
+        }
+
+    def optimizer(self):
+        return optimizers.Adam()
+
+    def compile(self):
+        self._model.compile(
+            loss=keras.losses.categorical_crossentropy,
+            optimizer=self.optimizer(),
+            metrics=self.metrics()
+        )

@@ -7,7 +7,7 @@ from trainer import Trainer
 
 
 def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, restart_training=False,
-          batch_size=None, n_gpu=1, summaries=False, epochs=150, early_stopping=10):
+          batch_size=None, n_gpu=1, summaries=False, epochs=200, early_stopping=20):
     target_size = config.target_size()
     batch_size = batch_size or 2
 
@@ -21,7 +21,7 @@ def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, 
     trainer.fit_model(
         run_name=run_name,
         epochs=epochs,
-        restart_training=restart_training
+        restart_training=restart_training,
     )
 
 
@@ -56,11 +56,11 @@ if __name__ == '__main__':
 
         parser.add_argument('-e', '--epochs',
                             help='Number of epochs',
-                            default=150)
+                            default=300)
 
         parser.add_argument('-s', '--stop',
                             help='Early stopping',
-                            default=5)
+                            default=20)
 
         parser.add_argument('--gid',
                             help='GPU id',

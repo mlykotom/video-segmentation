@@ -1,10 +1,11 @@
 import itertools
 import random
 from abc import ABCMeta, abstractmethod, abstractproperty
+from math import ceil
 
 import cv2
-import numpy as np
 import tensorflow as tf
+from keras.preprocessing.image import *
 
 
 class BaseDataGenerator:
@@ -14,11 +15,18 @@ class BaseDataGenerator:
     def name(self):
         pass
 
-    def __init__(self, dataset_path, debug_samples=0):
+    def __init__(self, dataset_path, debug_samples=0, gt_sub=[4, 8, 16], flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
         self._debug_samples = debug_samples
+        self._is_debug = debug_samples > 0
         self._data = {'train': [], 'val': [], 'test': []}
+        self.gt_sub = gt_sub
         self.dataset_path = dataset_path
+        self.flip_enabled = flip_enabled
+        self.zoom = zoom
+        self.rotation = rotation
+        self.brightness = brightness
 
+        print("--- flip " + str(self.flip_enabled))
         print(dataset_path)
 
         self._fill_split('train')
@@ -28,7 +36,8 @@ class BaseDataGenerator:
         # sample for debugging
         if debug_samples > 0:
             self._data['train'] = self._data['train'][:debug_samples]
-            self._data['val'] = self._data['val'][:debug_samples]
+            half_debug_samples = int(ceil(debug_samples * 0.5))
+            self._data['val'] = self._data['val'][:half_debug_samples]
 
         print("training samples %d, validating samples %d, test samples %d" %
               (len(self._data['train']), len(self._data['val']), len(self._data['test'])))
@@ -61,37 +70,6 @@ class BaseDataGenerator:
         print("Cityscapes: shuffling dataset")
         random.shuffle(self._data[type])
 
-    def normalize(self, rgb, target_size, equalize_hist=False):
-        if target_size is not None:
-            rgb = cv2.resize(rgb, target_size[::-1])
-
-        norm_image = np.zeros_like(rgb, dtype=np.float32)
-        # if equalize_hist:
-        # raise NotImplementedError("not implemented equalize")
-        # norm_image[:, :, 0] = cv2.equalizeHist(rgb[:, :, 0])
-        # norm_image[:, :, 1] = cv2.equalizeHist(rgb[:, :, 1])
-        # norm_image[:, :, 2] = cv2.equalizeHist(rgb[:, :, 2])
-
-        # norm_image = norm_image / 256.0
-        cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-        return norm_image
-
-    def one_hot_encoding(self, label_img, target_size):
-        label_img = cv2.cvtColor(label_img, cv2.COLOR_BGR2RGB)
-        label_img = cv2.resize(label_img, target_size[::-1], interpolation=cv2.INTER_NEAREST)
-
-        label_list = []
-        for lab in self.labels:
-            label_current = np.all(label_img == lab, axis=2).astype(np.uint8)
-            label_list.append(label_current)
-
-        label_arr = np.array(label_list)
-
-        seg_labels = np.rollaxis(label_arr, 0, 3)
-        seg_labels = np.reshape(seg_labels, (label_img.shape[0] * label_img.shape[1], label_arr.shape[0]))
-
-        return seg_labels
-
     def flow(self, type, batch_size, target_size):
         """
         :param type: one of [train,val,test]
@@ -101,28 +79,56 @@ class BaseDataGenerator:
         """
 
         zipped = itertools.cycle(self._data[type])
+        i = 0
+
         while True:
-            X = []
             Y = []
+            Y2 = []
+            Y3 = []
+
+            in_arr = [[]] * 1
+            out_arr = [[]] * len(self.gt_sub)
 
             for _ in range(batch_size):
                 img_path, label_path = next(zipped)
 
-                img = cv2.imread(img_path)
-                if img is None:
-                    raise ValueError("Image %s was not found!" % img_path)
+                apply_flip = random.randint(0, 1)
 
+                img = self._prep_img(type, img_path, target_size, apply_flip)
                 img = self.normalize(img, target_size)
-                X.append(img)
 
-                seg_tensor = cv2.imread(label_path)
-                if seg_tensor is None:
-                    raise ValueError("GT %s was not found!" % label_path)
+                in_arr[0].append(img)
 
-                seg_tensor = self.one_hot_encoding(seg_tensor, target_size)
+                seg_img = self._prep_gt(type, label_path, target_size, apply_flip)
+
+                seg_tensor = self.one_hot_encoding(seg_img, tuple(a // 4 for a in target_size))  # target_size)
                 Y.append(seg_tensor)
 
-            yield np.array(X), np.array(Y)
+                seg_tensor2 = self.one_hot_encoding(seg_img, tuple(a // 8 for a in target_size))
+                Y2.append(seg_tensor2)
+
+                seg_tensor3 = self.one_hot_encoding(seg_img, tuple(a // 16 for a in target_size))
+                Y3.append(seg_tensor3)
+
+                if self.gt_sub is None:
+                    seg_tensor = self.one_hot_encoding(seg_img, target_size)
+                    out_arr[0].append(seg_tensor)
+                else:
+                    for s_i, sub in enumerate(self.gt_sub):
+                        subsampled_target_size = tuple(a // sub for a in target_size)
+                        seg_tensor = self.one_hot_encoding(seg_img, subsampled_target_size)
+                        out_arr[s_i].append(seg_tensor)
+
+            i += 1
+
+            x = [np.asarray(j) for j in in_arr]
+            # y = [np.asarray(j) for j in out_arr]
+
+            potential_output = [np.array(Y), np.array(Y2), np.array(Y3)]
+
+            # yield np.array(in_arr[0]), [np.array(out_arr[0]), np.array(out_arr[1]), np.array(out_arr[2])]
+            y = [np.array(Y), np.array(Y2), np.array(Y3)]
+            yield x, y
 
     def load_data(self, type, batch_size, target_size):
         data = []
@@ -145,6 +151,9 @@ class BaseDataGenerator:
 
         return np.array(data), np.array(labs)
 
+    def data_length(self, type):
+        return len(self._data[type])
+
     def steps_per_epoch(self, type, batch_size, gpu_count=1):
         """
         From Keras documentation: Total number of steps (batches of samples) to yield from generator before
@@ -155,13 +164,95 @@ class BaseDataGenerator:
         :param gpu_count:
         :return:
         """
-        return int(np.ceil(len(self._data[type]) / float(batch_size * gpu_count)))
+        # steps = int(np.ceil(len(self._data[type]) / float(batch_size * gpu_count)))
+        # steps = int(np.floor(len(self._data[type]) / float(batch_size * gpu_count)))
+        steps = max(1, int(self.data_length(type) // (batch_size * gpu_count)))
+        # print("STEPS:", steps, type, batch_size, gpu_count)
+        return steps
+        # return (steps * 2) if type == 'train' and self.flip_enabled else steps
 
     def _load_img(self, img_path):
         img = cv2.imread(img_path)
         if img is None:
             raise ValueError("Image %s was not found!" % img_path)
         return img
+
+    def _prep_img(self, type, img_path, target_size, apply_flip=False):
+        img = cv2.resize(self._load_img(img_path), target_size[::-1])
+
+        if not self._is_debug and type == 'train':
+            if self.brightness:
+                factor = 1.0 + abs(random.gauss(mu=0.0, sigma=self.brightness))
+                if random.randint(0, 1):
+                    factor = 1.0 / factor
+                table = np.array([((i / 255.0) ** factor) * 255 for i in np.arange(0, 256)]).astype(np.uint8)
+                img = cv2.LUT(img, table)
+
+            if self.flip_enabled and apply_flip:
+                img = cv2.flip(img, 1)
+
+        # if self.rotation:
+        #     angle = random.gauss(mu=0.0, sigma=self.rotation)
+        # else:
+        #     angle = 0.0
+        # if self.zoom:
+        #     scale = random.gauss(mu=1.0, sigma=self.zoom)
+        # else:
+        #     scale = 1.0
+
+        # if self.rotation or self.zoom:
+        #     M = cv2.getRotationMatrix2D((img.shape[1] // 2, img.shape[0] // 2), angle, scale)
+        #     img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
+        #     img2 = cv2.warpAffine(img2, M, (img2.shape[1], img2.shape[0]))
+        return img
+
+    # TODO
+    def normalize(self, rgb, target_size, equalize_hist=False):
+        if target_size is not None:
+            rgb = cv2.resize(rgb, target_size[::-1])
+
+        norm_image = np.zeros_like(rgb, dtype=np.float32)
+        # if equalize_hist:
+        # raise NotImplementedError("not implemented equalize")
+        # norm_image[:, :, 0] = cv2.equalizeHist(rgb[:, :, 0])
+        # norm_image[:, :, 1] = cv2.equalizeHist(rgb[:, :, 1])
+        # norm_image[:, :, 2] = cv2.equalizeHist(rgb[:, :, 2])
+
+        # norm_image = norm_image / 256.0
+        cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+        return norm_image
+
+    def _prep_gt(self, type, label_path, target_size, apply_flip=False):
+        seg_img = self._load_img(label_path)
+
+        if not self._is_debug and type == 'train':
+            if self.flip_enabled and apply_flip:
+                seg_img = cv2.flip(seg_img, 1)
+
+        # if self.rotation or self.zoom:
+        #     M = cv2.getRotationMatrix2D((seg_img.shape[1] // 2, seg_img.shape[0] // 2), angle, scale)
+        #     seg_img = cv2.warpAffine(seg_img, M, (seg_img.shape[1], seg_img.shape[0]))
+
+        return seg_img
+
+    def one_hot_encoding(self, label_img, target_size):
+        label_img = cv2.cvtColor(label_img, cv2.COLOR_BGR2RGB)
+        label_img = cv2.resize(label_img, target_size[::-1], interpolation=cv2.INTER_NEAREST)
+
+        label_list = []
+
+        for lab in self.labels:
+            label_current = np.all(label_img == lab, axis=2).astype(np.uint8)
+            label_list.append(label_current)
+
+        label_arr = np.array(label_list)
+        seg_labels = np.rollaxis(label_arr, 0, 3)
+        # seg_labels = np.reshape(seg_labels, (label_img.shape[0] * label_img.shape[1], label_arr.shape[0]))
+
+        # TODO not mine, example
+        # seg_labels = to_categorical(label_img, self.n_classes).reshape((label_img.shape[0] * label_img.shape[1], -1))
+
+        return seg_labels
 
     @staticmethod
     def get_color_from_label(class_id_image, n_classes, labels):
@@ -183,9 +274,16 @@ class BaseDataGenerator:
 class BaseFlowGenerator(BaseDataGenerator):
     __metaclass__ = ABCMeta
 
-    def __init__(self, dataset_path, debug_samples=0):
+    def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
         self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
-        super(BaseFlowGenerator, self).__init__(dataset_path, debug_samples)
+        super(BaseFlowGenerator, self).__init__(
+            dataset_path,
+            debug_samples=debug_samples,
+            flip_enabled=flip_enabled,
+            rotation=rotation,
+            zoom=zoom,
+            brightness=brightness
+        )
 
     def calc_optical_flow(self, old, new, flow_type='dis'):
         old_gray = cv2.cvtColor(old, cv2.COLOR_RGB2GRAY)
@@ -213,7 +311,7 @@ class BaseFlowGenerator(BaseDataGenerator):
 
                 img = cv2.resize(self._load_img(img_old_path), target_size[::-1])
                 img2 = cv2.resize(self._load_img(img_new_path), target_size[::-1])
-                flow = self.calc_optical_flow(img, img2, 'dis')
+                flow = self.calc_optical_flow(img2, img, 'dis')
 
                 input1 = self.normalize(img, target_size=None)
                 input2 = self.normalize(img2, target_size=None)

@@ -1,5 +1,4 @@
 import os
-import random
 import re
 
 import cv2
@@ -9,13 +8,16 @@ from base_generator import BaseDataGenerator
 
 
 class CityscapesGenerator(BaseDataGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=0, prev_skip=0, old_labels=False):
-
+    def __init__(self, dataset_path, debug_samples=0, how_many_prev=0, prev_skip=0, old_labels=False, flip_enabled=False):
         dataset_path = os.path.join(dataset_path, 'cityscapes/')
         self._file_pattern = re.compile("(?P<city>[^_]*)_(?:[^_]+)_(?P<frame>[^_]+)_gtFine_color\.png")
         self._how_many_prev = how_many_prev
         self._prev_skip = prev_skip
-        super(CityscapesGenerator, self).__init__(dataset_path, debug_samples)
+        super(CityscapesGenerator, self).__init__(
+            dataset_path,
+            debug_samples,
+            flip_enabled=flip_enabled
+        )
 
     _city_labels = [lab.color for lab in cityscapes_labels.labels]
 
@@ -83,8 +85,6 @@ class CityscapesGenerator(BaseDataGenerator):
         norm = super(CityscapesGenerator, self).normalize(rgb, target_size, equalize_hist)
         norm -= self._config['mean']
         norm /= self._config['std']
-
-        import numpy as np
         return norm
 
 
@@ -99,24 +99,20 @@ if __name__ == '__main__':
 
     import config
 
-    datagen = CityscapesGenerator(config.data_path())
+    datagen = CityscapesGenerator(config.data_path(), flip_enabled=True)
 
-    batch_size = 3
+    batch_size = 1
     # target_size = 288, 480
     target_size = 256, 512
     # target_size = 1024, 2048  # orig size
 
-    import matplotlib.pyplot as plt
-
-    for imgBatch, labelBatch in datagen.flow('val', batch_size, target_size):
+    for imgBatch, labelBatch in datagen.flow('train', batch_size, target_size):
         print(len(imgBatch))
 
-        img = imgBatch[0]
-        label = labelBatch[0]
+        img = imgBatch[0][0]
+        label = labelBatch[0][0]
 
-        print(img.shape, label.shape)
-
-        colored_class_image = datagen.one_hot_to_bgr(label, target_size, datagen.n_classes, datagen.labels)
+        colored_class_image = datagen.one_hot_to_bgr(label, tuple(a // 4 for a in target_size), datagen.n_classes, datagen.labels)
 
         cv2.imshow("normalized", img)
         cv2.imshow("gt", colored_class_image)

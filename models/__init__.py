@@ -7,3 +7,5 @@ from .segnet_warp import SegNetWarp
 from .segnet_warp_diff import SegNetWarpDiff
 from .segnet_warp_diff_123 import SegNetWarpDiff123
 from .mobile_unet_warp import *
+from .icnet import *
+from .icnet_warp import *
