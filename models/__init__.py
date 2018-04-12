@@ -1,7 +1,5 @@
 from .base_model import BaseModel
-from .flow_cnn import FlowCNN
 from .mobile_unet import MobileUNet
-from .app_mobile_unet import AppMobileNetUnet
 from .segnet import SegNet
 from .segnet_warp import SegNetWarp
 from .segnet_warp_diff import SegNetWarpDiff

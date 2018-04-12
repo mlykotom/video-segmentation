@@ -1,6 +1,7 @@
 import keras
-from keras import Input, Model
+from keras import Input
 from keras.layers import Conv2D, MaxPooling2D, Dropout, UpSampling2D, concatenate, Reshape, Activation
+from keras.models import Model
 
 from base_model import BaseModel
 

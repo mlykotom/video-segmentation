@@ -186,8 +186,6 @@ class Trainer:
 
     def prepare_callbacks(self, run_name, epochs, use_validation_data=False):
         # ------------- tensorboard
-        # TODO copy output folder after each epoch to remote server
-
         tb = CustomTensorBoard(
             (self.cpu_model if self.n_gpu > 1 else self.model.k),
             self.get_run_path(run_name, '../../logs'),
@@ -266,6 +264,10 @@ class Trainer:
         }
 
         losswise_params.update(self.model.params())
+
+        run_name = run_name + 'b%d_lr=%f_dec=%f' % (self.batch_size,
+                                                    losswise_params['optimizer']['lr'],
+                                                    losswise_params['optimizer']['decay'])
 
         losswise_callback = LosswiseKerasCallback(
             tag=run_name,

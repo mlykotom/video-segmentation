@@ -1,7 +1,8 @@
 import keras
-from keras import Input, Model, optimizers
+from keras import Input, optimizers
 from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Lambda, \
     Add, SpatialDropout2D
+from keras.models import Model
 
 from segnet_warp_diff import SegNetWarpDiff
 

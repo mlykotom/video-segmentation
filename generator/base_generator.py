@@ -249,9 +249,6 @@ class BaseDataGenerator:
         seg_labels = np.rollaxis(label_arr, 0, 3)
         # seg_labels = np.reshape(seg_labels, (label_img.shape[0] * label_img.shape[1], label_arr.shape[0]))
 
-        # TODO not mine, example
-        # seg_labels = to_categorical(label_img, self.n_classes).reshape((label_img.shape[0] * label_img.shape[1], -1))
-
         return seg_labels
 
     @staticmethod
@@ -275,7 +272,6 @@ class BaseFlowGenerator(BaseDataGenerator):
     __metaclass__ = ABCMeta
 
     def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
-        self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
         super(BaseFlowGenerator, self).__init__(
             dataset_path,
             debug_samples=debug_samples,
@@ -290,6 +286,9 @@ class BaseFlowGenerator(BaseDataGenerator):
         new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 
         if flow_type == 'dis':
+            if self.optical_flow is None:
+                self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
+
             return self.optical_flow.calc(old_gray, new_gray, None)
         else:
             return cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)

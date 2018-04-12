@@ -2,7 +2,6 @@ from abc import ABCMeta, abstractmethod
 
 import keras.utils
 from keras import optimizers
-from keras.utils import multi_gpu_model
 
 
 class BaseModel:
@@ -24,6 +23,7 @@ class BaseModel:
         self._model = self._create_model()
 
     def make_multi_gpu(self, n_gpu):
+        from keras.utils import multi_gpu_model
         self._model = multi_gpu_model(self._model, n_gpu)
 
     def load_model(self, filepath, custom_objects=None, compile_model=True):
@@ -117,7 +117,11 @@ class BaseModel:
         ]
 
     def optimizer_params(self):
-        return {'lr': 0.0002, 'decay': 0.0991}
+        if self.is_debug:
+            return {'lr': 0.0002, 'decay': 0.0991}
+        else:
+            # return {'lr': 0.0009, 'decay': 0.005}
+            return {'lr': 0.001, 'decay': 0.005}
 
     def params(self):
         return {

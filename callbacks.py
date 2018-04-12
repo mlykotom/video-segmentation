@@ -87,37 +87,6 @@ class CustomTensorBoard(TensorBoard):
         super(CustomTensorBoard, self).on_epoch_end(epoch, logs)
 
 
-# class Visualization(Callback):
-#     def __init__(self, resize_shape=(640, 320), batch_steps=10, n_gpu=1):
-#         super(Visualization, self).__init__()
-#         self.resize_shape = resize_shape
-#         self.batch_steps = batch_steps
-#         self.n_gpu = n_gpu
-#         self.counter = 0
-#
-#         # TODO: Remove this lazy hardcoded paths
-#         self.test_images_list = glob.glob('datasets/mapillary/testing/images/*')
-#         with open('datasets/mapillary/config.json') as config_file:
-#             config = json.load(config_file)
-#         self.labels = config['labels']
-#
-#     def on_batch_end(self, batch, logs={}):
-#         self.counter += 1
-#
-#         if self.counter == self.batch_steps:
-#             self.counter = 0
-#
-#             test_image = cv2.resize(cv2.imread(random.choice(self.test_images_list), 1), self.resize_shape)
-#
-#             inputs = [test_image] * self.n_gpu
-#             output, _, _ = self.model.predict(np.array(inputs), batch_size=self.n_gpu)
-#
-#             cv2.imshow('input', test_image)
-#             cv2.waitKey(1)
-#             cv2.imshow('output', apply_color_map(np.argmax(output[0], axis=-1), self.labels))
-#             cv2.waitKey(1)
-
-
 class SaveLastTrainedEpochCallback(callbacks.Callback):
     """
     On epoch end saves currently finished epoch to file

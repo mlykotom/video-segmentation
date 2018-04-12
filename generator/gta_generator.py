@@ -41,7 +41,6 @@ class GTAGenerator(BaseDataGenerator):
         split = split[which_set + "Ids"]
 
         # To remove (Files with different size in img and mask)
-        # TODO general (this is applied only to GTA)
         to_remove = [1, 2] + [15188, ] + range(20803, 20835) + range(20858, 20861)
 
         for id in split:

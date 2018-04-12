@@ -1,7 +1,7 @@
 import keras
 import tensorflow as tf
 from keras import optimizers
-from keras.layers import Activation, Reshape, BatchNormalization, Permute
+from keras.layers import Activation, BatchNormalization
 from keras.layers import Add
 from keras.layers import AveragePooling2D
 from keras.layers import Conv2D
@@ -12,7 +12,6 @@ from keras.layers import ZeroPadding2D
 from keras.models import Model
 
 from base_model import BaseModel
-
 from layers import BilinearUpSampling2D
 
 
@@ -300,9 +299,6 @@ class ICNet(BaseModel):
                 metrics.mean_iou
             ]
         }
-
-    def optimizer_params(self):
-        return {'lr': 0.0002, 'decay': 0.0991}
 
     def optimizer(self):
         # return optimizers.Adam(lr=0.0001) # baseline_b6_lr0.0001

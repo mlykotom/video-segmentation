@@ -1,9 +1,10 @@
 from math import ceil
 
 import keras
-from keras import Input, Model
+from keras import Input
 from keras.layers import BatchNormalization, Activation, Lambda, Conv2D, AveragePooling2D, Concatenate, Dropout, \
     MaxPooling2D, ZeroPadding2D, Add
+from keras.models import Model
 
 from base_model import BaseModel
 

@@ -69,7 +69,7 @@ if __name__ == '__main__':
         parser.add_argument(
             '-n', '--name',
             help='Run Name',
-            default=strftime("%Y_%m_%d_%H:%M", gmtime())
+            default=strftime("%d%H:%M", gmtime())
         )
 
         args = parser.parse_args()
