@@ -10,18 +10,11 @@ import itertools
 import numpy as np
 
 from base_generator import BaseFlowGenerator
-from cityscapes_generator import CityscapesGenerator
+from cityscapes_flow_generator import CityscapesFlowGenerator
 
 
-class CityscapesFlowGeneratorForICNet(CityscapesGenerator, BaseFlowGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flip_enabled=False):
-        super(CityscapesFlowGeneratorForICNet, self).__init__(
-            dataset_path=dataset_path,
-            debug_samples=debug_samples,
-            how_many_prev=how_many_prev,
-            prev_skip=prev_skip,
-            flip_enabled=flip_enabled
-        )
+class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator):
+    gt_sub = [4, 8, 16]
 
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])

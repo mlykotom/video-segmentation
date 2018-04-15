@@ -310,8 +310,6 @@ class ICNet(BaseModel):
         }
 
     def compile(self):
-        print("-- Optimizer: " + type(self.optimizer()).__name__)
-
         if self.training_phase:
             phase_loss_weights = [1.0, 0.4, 0.16]
         else:

@@ -1,3 +1,4 @@
+import datetime
 import itertools
 import random
 from abc import ABCMeta, abstractmethod, abstractproperty
@@ -15,11 +16,10 @@ class BaseDataGenerator:
     def name(self):
         pass
 
-    def __init__(self, dataset_path, debug_samples=0, gt_sub=[4, 8, 16], flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
+    def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
         self._debug_samples = debug_samples
         self.is_augment = debug_samples > 50
         self._data = {'train': [], 'val': [], 'test': []}
-        self.gt_sub = gt_sub
         self.dataset_path = dataset_path
         self.flip_enabled = flip_enabled
         self.zoom = zoom
@@ -82,12 +82,8 @@ class BaseDataGenerator:
         i = 0
 
         while True:
+            X = []
             Y = []
-            Y2 = []
-            Y3 = []
-
-            in_arr = [[]] * 1
-            out_arr = [[]] * len(self.gt_sub)
 
             for _ in range(batch_size):
                 img_path, label_path = next(zipped)
@@ -96,38 +92,17 @@ class BaseDataGenerator:
 
                 img = self._prep_img(type, img_path, target_size, apply_flip)
                 img = self.normalize(img, target_size)
-
-                in_arr[0].append(img)
+                X.append(img)
 
                 seg_img = self._prep_gt(type, label_path, target_size, apply_flip)
-
-                seg_tensor = self.one_hot_encoding(seg_img, tuple(a // 4 for a in target_size))  # target_size)
+                seg_tensor = self.one_hot_encoding(seg_img, target_size)
                 Y.append(seg_tensor)
-
-                seg_tensor2 = self.one_hot_encoding(seg_img, tuple(a // 8 for a in target_size))
-                Y2.append(seg_tensor2)
-
-                seg_tensor3 = self.one_hot_encoding(seg_img, tuple(a // 16 for a in target_size))
-                Y3.append(seg_tensor3)
-
-                if self.gt_sub is None:
-                    seg_tensor = self.one_hot_encoding(seg_img, target_size)
-                    out_arr[0].append(seg_tensor)
-                else:
-                    for s_i, sub in enumerate(self.gt_sub):
-                        subsampled_target_size = tuple(a // sub for a in target_size)
-                        seg_tensor = self.one_hot_encoding(seg_img, subsampled_target_size)
-                        out_arr[s_i].append(seg_tensor)
 
             i += 1
 
-            x = [np.asarray(j) for j in in_arr]
-            # y = [np.asarray(j) for j in out_arr]
+            x = [np.asarray(X)]
+            y = [np.array(Y)]
 
-            potential_output = [np.array(Y), np.array(Y2), np.array(Y3)]
-
-            # yield np.array(in_arr[0]), [np.array(out_arr[0]), np.array(out_arr[1]), np.array(out_arr[2])]
-            y = [np.array(Y), np.array(Y2), np.array(Y3)]
             yield x, y
 
     def load_data(self, type, batch_size, target_size):
@@ -164,12 +139,8 @@ class BaseDataGenerator:
         :param gpu_count:
         :return:
         """
-        # steps = int(np.ceil(len(self._data[type]) / float(batch_size * gpu_count)))
-        # steps = int(np.floor(len(self._data[type]) / float(batch_size * gpu_count)))
         steps = max(1, int(self.data_length(type) // (batch_size * gpu_count)))
-        # print("STEPS:", steps, type, batch_size, gpu_count)
         return steps
-        # return (steps * 2) if type == 'train' and self.flip_enabled else steps
 
     def _load_img(self, img_path):
         img = cv2.imread(img_path)
@@ -206,19 +177,11 @@ class BaseDataGenerator:
         #     img2 = cv2.warpAffine(img2, M, (img2.shape[1], img2.shape[0]))
         return img
 
-    # TODO
-    def normalize(self, rgb, target_size, equalize_hist=False):
+    def normalize(self, rgb, target_size):
         if target_size is not None:
             rgb = cv2.resize(rgb, target_size[::-1])
 
         norm_image = np.zeros_like(rgb, dtype=np.float32)
-        # if equalize_hist:
-        # raise NotImplementedError("not implemented equalize")
-        # norm_image[:, :, 0] = cv2.equalizeHist(rgb[:, :, 0])
-        # norm_image[:, :, 1] = cv2.equalizeHist(rgb[:, :, 1])
-        # norm_image[:, :, 2] = cv2.equalizeHist(rgb[:, :, 2])
-
-        # norm_image = norm_image / 256.0
         cv2.normalize(rgb, norm_image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         return norm_image
 
@@ -281,17 +244,26 @@ class BaseFlowGenerator(BaseDataGenerator):
             brightness=brightness
         )
 
-    def calc_optical_flow(self, old, new, flow_type='dis'):
+    def calc_optical_flow(self, old, new, flow_type='dis', with_time_difference=False):
         old_gray = cv2.cvtColor(old, cv2.COLOR_RGB2GRAY)
         new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 
+        start = datetime.datetime.now()
         if flow_type == 'dis':
             if not hasattr(self, 'optical_flow') or self.optical_flow is None:
                 self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
 
-            return self.optical_flow.calc(old_gray, new_gray, None)
+            flow = self.optical_flow.calc(old_gray, new_gray, None)
         else:
-            return cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+            flow = cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+
+        end = datetime.datetime.now()
+        diff = end - start
+
+        if with_time_difference:
+            return flow, diff
+        else:
+            return flow
 
     def flow_just_img(self, type, batch_size, target_size):
         return super(BaseFlowGenerator, self).flow(type, batch_size, target_size)

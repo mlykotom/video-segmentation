@@ -13,13 +13,13 @@ from layers import BilinearUpSampling2D
 class MobileUNet(BaseModel):
 
     def __init__(self, target_size, n_classes, alpha=1.0, alpha_up=1.0, depth_multiplier=1, dropout=1e-3,
-                 is_debug=False):
+                 debug_samples=0):
         self.alpha = alpha
         self.alpha_up = alpha_up
         self.depth_multiplier = depth_multiplier
         self.dropout = dropout
 
-        super(MobileUNet, self).__init__(target_size, n_classes, is_debug)
+        super(MobileUNet, self).__init__(target_size, n_classes, debug_samples)
 
     @staticmethod
     def _conv_block(inputs, filters, alpha, kernel=(3, 3), strides=(1, 1), block_id=1, prefix=''):
@@ -79,8 +79,7 @@ class MobileUNet(BaseModel):
         return Activation(mobilenet.relu6, name='%sconv_%d_relu' % (prefix, block_id))(x)
 
     @staticmethod
-    def _depthwise_conv_block(inputs, pointwise_conv_filters, alpha, depth_multiplier=1, strides=(1, 1), block_id=1,
-                              prefix=''):
+    def _depthwise_conv_block(inputs, pointwise_conv_filters, alpha, depth_multiplier=1, strides=(1, 1), block_id=1, prefix=''):
         """Adds a depthwise convolution block.
 
         A depthwise convolution block consists of a depthwise conv,
@@ -170,8 +169,8 @@ class MobileUNet(BaseModel):
         b12 = self._depthwise_conv_block(b11, 1024, self.alpha, self.depth_multiplier, block_id=12, strides=(2, 2))
         b13 = self._depthwise_conv_block(b12, 1024, self.alpha, self.depth_multiplier, block_id=13)
 
-        if not self.is_debug:
-            b13 = SpatialDropout2D(0.2)(b13)
+        # if not self.is_debug:
+        #     b13 = SpatialDropout2D(0.2)(b13)
 
         filters = int(512 * self.alpha)
         up1 = concatenate([
@@ -218,8 +217,6 @@ class MobileUNet(BaseModel):
 
         x = Conv2D(self.n_classes, (1, 1), kernel_initializer='he_normal', activation='linear')(b18)
         x = BilinearUpSampling2D(size=(2, 2))(x)
-
-        x = Reshape((-1, self.n_classes))(x)
         x = Activation('softmax')(x)
 
         return Model(input, x)

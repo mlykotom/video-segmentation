@@ -5,7 +5,7 @@ np.random.seed(2018)
 import json
 
 import losswise
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, LambdaCallback
 from losswise.libs import LosswiseKerasCallback
 
 import config
@@ -35,40 +35,25 @@ class Trainer:
         print("-- Number of GPUs used %d" % self.n_gpu)
         print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
-        # ------------- data generator
-        # self.datagen = GTAGenerator(dataset_path, debug_samples=debug_samples)
-        # self.datagen = CamVidGenerator(dataset_path, debug_samples=debug_samples)
-        # self.datagen = CamVidFlowGenerator(dataset_path, debug_samples=debug_samples)
-        # self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-
-        # -------------  pick the right model
-        # if model_name == 'segnet':
-        #     model = SegNet(target_size, self.datagen.n_classes, is_debug=is_debug)
-        # elif model_name == 'app_mobnet':
-        #     model = MobileNetUnet(target_size, self.datagen.n_classes, is_debug=is_debug)
-        # elif model_name == 'mobile_unet':
-        #     model = MobileUNet(target_size, self.datagen.n_classes, is_debug=is_debug)
-        # else:
-        #     raise NotImplemented('Unknown model type')
-
+        # -------------  pick the right model with proper generator
         if model_name == 'segnet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegNet(target_size, self.datagen.n_classes, is_debug=is_debug)
+            model = SegNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'segnet_warp':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0)
-            model = SegNetWarpDiff123(target_size, self.datagen.n_classes, is_debug=is_debug)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegNetWarpDiff123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'mobile_unet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-            model = MobileUNet(target_size, self.datagen.n_classes, is_debug=is_debug)
+            model = MobileUNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-            model = ICNet(target_size, self.datagen.n_classes, is_debug=is_debug)
+            model = ICNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp':
             self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flip_enabled=not is_debug)
-            model = ICNetWarp(target_size, self.datagen.n_classes, is_debug=is_debug)
+            model = ICNetWarp(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         else:
             self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flip_enabled=not is_debug)
-            model = MobileUNetWarp2(target_size, self.datagen.n_classes, is_debug=is_debug)
+            model = MobileUNetWarp4(target_size, self.datagen.n_classes, debug_samples=debug_samples)
 
         # -------------  set multi gpu model
         self.model = model
@@ -90,7 +75,6 @@ class Trainer:
         import os
 
         """
-        #TODO when directory already exist, use new with prefix _2 or _3 ,...
         :param run_name:
         :param prefix_dir:
         :param name_postfix:
@@ -107,7 +91,18 @@ class Trainer:
         if not os.path.isfile(out_dir):
             utils.mkdir_recursive(out_dir)
 
-        return out_dir + '/' + run_name + name_postfix
+        final_path = out_dir + '/' + run_name
+
+        # calculate new folder name (if duplicate)
+        if os.path.exists(final_path):
+            i = 2
+            final_path += '_' + str(i)
+
+            while os.path.exists(final_path):
+                i += 1
+                final_path = final_path[:-1] + str(i)
+
+        return final_path + name_postfix
 
     def get_save_checkpoint_name(self, run_name):
         return self.get_run_path(run_name, './checkpoint/', '_save_epoch.h5')
@@ -184,7 +179,6 @@ class Trainer:
         self.train_callbacks.append(tb)
 
         # ------------- model checkpoint
-        # TODO will not work on PChradis
         filepath = self.get_run_path(run_name, '../../weights/', '.h5')
 
         checkpoint = ModelCheckpoint(
@@ -215,33 +209,32 @@ class Trainer:
         # self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
 
     def fit_model(self, run_name, epochs, restart_training=False):
-        restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
-        if restart_run_name is not None:
-            run_name = restart_run_name
+        # restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
+        # if restart_run_name is not None:
+        #     run_name = restart_run_name
+        # batch_size = batch_size or self.batch_size
+        restart_epoch = 0
+        batch_size = self.batch_size
 
         if self.n_gpu > 1 and self.cpu_model is not None:
             # WARNING: multi gpu model not working on version keras 2.1.4, this is workaround
             self.model.k.__setattr__('callback_model', self.cpu_model)
 
-        batch_size = batch_size or self.batch_size
-
         train_generator = self.datagen.flow('train', batch_size, self.target_size)
         train_steps = self.datagen.steps_per_epoch('train', batch_size)
-
-        # val_data = self.datagen.load_data('val', batch_size, self.target_size)
-        val_data = None
         val_generator = self.datagen.flow('val', batch_size, self.target_size)
         val_steps = self.datagen.steps_per_epoch('val', batch_size)
 
         if not self.is_debug:
             # -- shuffle dataset after every epoch
-            shuffler = keras.callbacks.LambdaCallback(on_epoch_end=lambda epoch, logs: self.datagen.shuffle('train'))
+            shuffler = LambdaCallback(on_epoch_end=lambda epoch, logs: self.datagen.shuffle('train'))
             self.train_callbacks.append(shuffler)
 
         # ------------- losswise dashboard
 
         losswise_params = {
-            'batch': self.batch_size,
+            'samples': train_steps,
+            'batch_size': self.batch_size,
             'model': self.model.name,
             'train_data': {
                 'length': self.datagen.data_length('train'),
@@ -263,7 +256,14 @@ class Trainer:
         )
         self.train_callbacks.append(losswise_callback)
 
-        self.prepare_callbacks(run_name, epochs, use_validation_data=val_data is not None)
+        self.prepare_callbacks(run_name, epochs)
+
+        def print_weights_lc(batch, logs):
+            weights = self.model.k.get_layer('linear_combination_1').get_weights()
+            print("LC avg", np.average(weights[0]), np.average(weights[1]))
+
+        print_weights = LambdaCallback(on_epoch_end=print_weights_lc)
+        self.train_callbacks.append(print_weights)
 
         self.model.k.fit_generator(
             generator=train_generator,
@@ -271,7 +271,6 @@ class Trainer:
             epochs=epochs,
             initial_epoch=restart_epoch,
             verbose=1,
-            # validation_data=val_data,
             validation_data=val_generator,
             validation_steps=val_steps,
             callbacks=self.train_callbacks,

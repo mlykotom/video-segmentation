@@ -6,8 +6,8 @@ import config
 from trainer import Trainer
 
 
-def train(dataset_path, model_name='mobile_unet', run_name='', debug_samples=0, restart_training=False,
-          batch_size=None, n_gpu=1, summaries=False, epochs=200, early_stopping=20):
+def train(dataset_path, model_name='mobile_unet', epochs=200, run_name='', debug_samples=0, restart_training=False,
+          batch_size=None, n_gpu=1, summaries=False, early_stopping=20):
     target_size = config.target_size()
     batch_size = batch_size or 2
 
@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
         parser.add_argument('-e', '--epochs',
                             help='Number of epochs',
-                            default=300)
+                            default=200)
 
         parser.add_argument('-s', '--stop',
                             help='Early stopping',
@@ -111,13 +111,13 @@ if __name__ == '__main__':
         train(
             dataset_path=dataset_path,
             model_name=args.model,
+            epochs=int(args.epochs),
             run_name=args.name,
             debug_samples=int(args.debug),
             restart_training=args.restart,
             batch_size=int(args.batch),
             n_gpu=int(args.gpus),
             summaries=args.summaries,
-            epochs=int(args.epochs),
             early_stopping=int(args.stop)
         )
     except KeyboardInterrupt:

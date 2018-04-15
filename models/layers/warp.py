@@ -1,20 +1,52 @@
 import keras
 import keras.backend as K
-from keras.engine import Layer
-from keras.layers import Lambda, BatchNormalization, Conv2D, concatenate
-
 import tensorflow as tf
+from keras.engine import Layer
+from keras.layers import Lambda, Conv2D, concatenate
+
+
+class LinearCombination(Layer):
+    def __init__(self, init_weights=[0.9, 0.1], **kwargs):
+        self.init_weights = init_weights
+        super(LinearCombination, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        if input_shape[0] != input_shape[1]:
+            raise Exception("Input shapes must be the same to LinearCombination layer")
+
+        channels = input_shape[0][-1]
+        self.w1 = self.add_weight(
+            name='w1',
+            shape=(channels,),
+            initializer=keras.initializers.Constant(self.init_weights[0]),
+            trainable=True
+        )
+
+        self.w2 = self.add_weight(
+            name='w2',
+            shape=(channels,),
+            initializer=keras.initializers.Constant(self.init_weights[1]),
+            trainable=True
+        )
+
+        super(LinearCombination, self).build(input_shape)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
+
+    def call(self, inputs, **kwargs):
+        return K.tf.multiply(inputs[0], self.w1) + K.tf.multiply(inputs[1], self.w2)
 
 
 def netwarp_module(img_old, img_new, flo):
-    diff = keras.layers.Subtract(name='data_diff')([img_new, img_old])
+    diff = keras.layers.Subtract(name='data_diff')([img_old, img_new])
 
     x = concatenate([img_old, img_new, flo, diff])
     x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
     x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
     x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
     x = concatenate([flo, x])
-    x = BatchNormalization()(x)
+    # x = BatchNormalization()(x)
     x = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
     return x
 
@@ -29,7 +61,7 @@ class Warp(Lambda):
         out_size = img.get_shape().as_list()[1:3]
         resized_flow = Lambda(lambda image: K.tf.image.resize_bilinear(image, out_size))(flow)
         out = tf_warp(img, resized_flow, out_size)
-        out = BatchNormalization()(out)
+        # out = BatchNormalization()(out)
         return out
 
     def __init__(self, **kwargs):

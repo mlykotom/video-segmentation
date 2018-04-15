@@ -7,7 +7,7 @@ from keras import optimizers
 class BaseModel:
     __metaclass__ = ABCMeta
 
-    def __init__(self, target_size, n_classes, is_debug=False, for_training=True):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
         """
         :param tuple target_size: (height, width)
         :param int n_classes: number of classes
@@ -15,7 +15,8 @@ class BaseModel:
         """
         self.target_size = target_size
         self.n_classes = n_classes
-        self.is_debug = is_debug
+        self.debug_samples = debug_samples
+        self.is_debug = debug_samples > 0
         self.training_phase = for_training
         self._model = self._create_model()
 
@@ -132,8 +133,17 @@ class BaseModel:
         }
 
     def optimizer_params(self):
-        if self.is_debug:
-            # return {'lr': 0.0002, 'decay': 0.0991} # for 120 samples
+        if self.debug_samples == 1:
+            # return {'lr': 0.0001, 'decay': 0.0999}  # for 1 samples
+            # return {'lr': 0.0005, 'decay': 0.}  # for 1 samples
+            return {'lr': 0.001, 'decay': 0.03}  # for 1 samples
+            # return {'lr': 0.0001, 'decay': 0.}  # for 1 samples
+        elif self.debug_samples == 5:
+            return {'lr': 0.002, 'decay': 0.0099
+                    }  # for 5 samples
+        elif self.debug_samples == 120:
+            return {'lr': 0.0002, 'decay': 0.0991}  # for 120 samples
+        elif self.debug_samples == 20:
             return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
         else:
             return {'lr': 0.001, 'decay': 0.005}  # running on mlyko.can
@@ -152,6 +162,9 @@ class BaseModel:
         return optimizers.Adam(lr=params['lr'], decay=params['decay'])
 
     def compile(self):
+        print("-- Optimizer: " + type(self.optimizer()).__name__)
+        print("---- Params: ", self.optimizer_params())
+
         self._model.compile(
             loss=keras.losses.categorical_crossentropy,
             optimizer=self.optimizer(),

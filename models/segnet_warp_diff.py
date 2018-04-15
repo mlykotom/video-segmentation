@@ -1,7 +1,6 @@
 import keras
 from keras import Input
-from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Lambda, \
-    Add, concatenate, Conv2D, SpatialDropout2D
+from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Add, SpatialDropout2D
 from keras.models import Model
 
 from base_model import BaseModel
@@ -9,12 +8,12 @@ from layers import Warp, netwarp_module
 
 
 class SegNetWarpDiff(BaseModel):
-    def __init__(self, target_size, n_classes, is_debug=False):
+    def __init__(self, target_size, n_classes, debug_samples=0):
         self._filter_size = 64
         self._pool_size = (2, 2)
         self._kernel_size = (3, 3)
 
-        super(SegNetWarpDiff, self).__init__(target_size, n_classes, is_debug)
+        super(SegNetWarpDiff, self).__init__(target_size, n_classes, debug_samples)
 
     def _block(self, input, filter_size, kernel_size, pool_size):
         out = Convolution2D(filter_size, kernel_size, padding='same')(input)

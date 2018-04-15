@@ -1,2 +1,2 @@
-from Warp import Warp, FlowFilter, netwarp_module, tf_warp
-from BilinearUpSampling import BilinearUpSampling2D
+from warp import Warp, FlowFilter, netwarp_module, tf_warp, LinearCombination
+from bilinear_upsampling import BilinearUpSampling2D

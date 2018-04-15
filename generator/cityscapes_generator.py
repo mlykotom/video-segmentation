@@ -81,8 +81,8 @@ class CityscapesGenerator(BaseDataGenerator):
         if not self._debug_samples:
             self.shuffle(which_set)
 
-    def normalize(self, rgb, target_size, equalize_hist=False):
-        norm = super(CityscapesGenerator, self).normalize(rgb, target_size, equalize_hist)
+    def normalize(self, rgb, target_size):
+        norm = super(CityscapesGenerator, self).normalize(rgb, target_size)
         norm -= self._config['mean']
         norm /= self._config['std']
         return norm
