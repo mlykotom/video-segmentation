@@ -286,7 +286,7 @@ class BaseFlowGenerator(BaseDataGenerator):
         new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 
         if flow_type == 'dis':
-            if self.optical_flow is None:
+            if not hasattr(self, 'optical_flow') or self.optical_flow is None:
                 self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
 
             return self.optical_flow.calc(old_gray, new_gray, None)

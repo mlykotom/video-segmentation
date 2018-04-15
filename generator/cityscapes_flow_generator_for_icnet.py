@@ -13,16 +13,15 @@ from base_generator import BaseFlowGenerator
 from cityscapes_generator import CityscapesGenerator
 
 
-class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
+class CityscapesFlowGeneratorForICNet(CityscapesGenerator, BaseFlowGenerator):
     def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flip_enabled=False):
-        super(CityscapesFlowGenerator, self).__init__(
+        super(CityscapesFlowGeneratorForICNet, self).__init__(
             dataset_path=dataset_path,
             debug_samples=debug_samples,
             how_many_prev=how_many_prev,
             prev_skip=prev_skip,
             flip_enabled=flip_enabled
         )
-
 
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
@@ -107,7 +106,7 @@ if __name__ == '__main__':
 
     import config
 
-    datagen = CityscapesFlowGenerator(config.data_path())
+    datagen = CityscapesFlowGeneratorForICNet(config.data_path())
 
     batch_size = 3
     # target_size = 288, 480

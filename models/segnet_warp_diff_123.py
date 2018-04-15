@@ -1,5 +1,5 @@
 import keras
-from keras import Input, optimizers
+from keras import Input
 from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Lambda, \
     Add, SpatialDropout2D
 from keras.models import Model
@@ -75,9 +75,6 @@ class SegNetWarpDiff123(SegNetWarpDiff):
         model = Model(inputs=all_inputs, outputs=[out])
 
         return model
-
-    def optimizer(self):
-        return optimizers.Adam(decay=0.00001)
 
 
 if __name__ == '__main__':

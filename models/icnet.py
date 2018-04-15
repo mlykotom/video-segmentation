@@ -1,6 +1,5 @@
 import keras
 import tensorflow as tf
-from keras import optimizers
 from keras.layers import Activation, BatchNormalization
 from keras.layers import Add
 from keras.layers import AveragePooling2D
@@ -231,12 +230,12 @@ class ICNet(BaseModel):
         return y
 
     def out_block(self, inputs, y, aux_1, aux_2):
-        out = Conv2D(self.n_classes, 1, activation='softmax', name='out')(y)  # conv6_cls
-        # out = Conv2D(self.n_classes, 1, padding='same', name='conv6_cls')(y)
-        # out = Reshape((-1, self.n_classes))(out)
-        # out = Activation('softmax', name='out')(out)
-
         if self.training_phase:
+            out = Conv2D(self.n_classes, 1, activation='softmax', name='out')(y)  # conv6_cls
+            # out = Conv2D(self.n_classes, 1, padding='same', name='conv6_cls')(y)
+            # out = Reshape((-1, self.n_classes))(out)
+            # out = Activation('softmax', name='out')(out)
+
             aux_1 = Conv2D(self.n_classes, 1, activation='softmax', name='sub4_out')(aux_1)
             # aux_1 = Conv2D(self.n_classes, 1, padding='same', name='sub4_out')(aux_1)
             # aux_1 = Reshape((-1, self.n_classes))(aux_1)
@@ -249,6 +248,9 @@ class ICNet(BaseModel):
 
             model = Model(inputs=inputs, outputs=[out, aux_2, aux_1])
         else:
+            out = Conv2D(self.n_classes, 1, activation='softmax', name='out')(y)  # conv6_cls
+            out = BilinearUpSampling2D(size=(4, 4), name='out_full')(out)
+
             model = Model(inputs=inputs, outputs=out)
 
         return model
@@ -287,6 +289,13 @@ class ICNet(BaseModel):
 
         return self.out_block(inp, y, aux_1, aux_2)
 
+    def get_custom_objects(self):
+        parent_objects = super(ICNet, self).get_custom_objects()
+        parent_objects.update({
+            'BilinearUpSampling2D': BilinearUpSampling2D,
+        })
+        return parent_objects
+
     def metrics(self):
         import metrics
 
@@ -296,11 +305,26 @@ class ICNet(BaseModel):
                 metrics.recall,
                 metrics.f1_score,
                 keras.metrics.categorical_accuracy,
-                metrics.mean_iou
+                metrics.mean_iou,
             ]
         }
 
-    def optimizer(self):
+    def compile(self):
+        print("-- Optimizer: " + type(self.optimizer()).__name__)
+
+        if self.training_phase:
+            phase_loss_weights = [1.0, 0.4, 0.16]
+        else:
+            phase_loss_weights = None
+
+        self._model.compile(
+            loss=keras.losses.categorical_crossentropy,
+            optimizer=self.optimizer(),
+            metrics=self.metrics(),
+            loss_weights=phase_loss_weights
+        )
+
+    def optimizer_params(self):
         # return optimizers.Adam(lr=0.0001) # baseline_b6_lr0.0001
         # return optimizers.Adam(decay=0.00006)
         # return optimizers.Adam()
@@ -311,19 +335,19 @@ class ICNet(BaseModel):
         # return optimizers.Adam(lr=0.0001, decay=0.003) # TODO: 2nd best
         # return optimizers.Adam(lr=0.0002, decay=0.099)  # TODO this is the best
 
-        params = self.optimizer_params()
-        return optimizers.Adam(lr=params['lr'], decay=params['decay'])
-        # return optimizers.SGD(lr=0.001, momentum=0.9,)
-
-    def compile(self):
-        print("-- Optimizer: " + type(self.optimizer()).__name__)
-
-        self._model.compile(
-            loss=keras.losses.categorical_crossentropy,
-            optimizer=self.optimizer(),
-            metrics=self.metrics(),
-            loss_weights=[1.0, 0.4, 0.16]
-        )
+        if self.is_debug:
+            # return {'lr': 0.0002, 'decay': 0.0991} # for 120 samples
+            # return {'lr': 0.000305, 'decay': 0.0991} # for 20 samples
+            return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
+        else:
+            # return {'lr': 0.0009, 'decay': 0.005}
+            # return {'lr': 0.001, 'decay': 0.005} # running on mlyko.can
+            # return {'lr': 0.001, 'decay': 0.01}  # running on mlyko.can
+            # return {'lr': 0.001, 'decay': 0.009}  # running on mlyko.can
+            # return {'lr': 0.0018, 'decay': 0.001}  # running on doom
+            # return {'lr': 0.001, 'decay': 0.009} # runs on doom
+            # return {'lr': 0.0017, 'decay': 0.001}  # running on mlyko.can
+            return {'lr': 0.002, 'decay': 0.002}  # running on mlyko.can
 
 
 if __name__ == '__main__':
@@ -333,6 +357,6 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNet(target_size, 32)
+    model = ICNet(target_size, 32, for_training=False)
     print(model.summary())
     model.plot_model()

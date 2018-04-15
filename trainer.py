@@ -1,3 +1,7 @@
+import numpy as np
+
+np.random.seed(2018)
+
 import json
 
 import losswise
@@ -5,7 +9,6 @@ from keras.callbacks import ModelCheckpoint
 from losswise.libs import LosswiseKerasCallback
 
 import config
-import metrics
 import utils
 from callbacks import SaveLastTrainedEpochCallback, CustomTensorBoard
 from generator import *
@@ -52,12 +55,8 @@ class Trainer:
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = SegNet(target_size, self.datagen.n_classes, is_debug=is_debug)
         elif model_name == 'segnet_warp':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
-                                                   flow_with_diff=True)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0)
             model = SegNetWarpDiff123(target_size, self.datagen.n_classes, is_debug=is_debug)
-        elif model_name == 'app_mobile_unet':
-            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-            model = AppMobileNetUnet(target_size, self.datagen.n_classes, is_debug=is_debug)
         elif model_name == 'mobile_unet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = MobileUNet(target_size, self.datagen.n_classes, is_debug=is_debug)
@@ -65,12 +64,10 @@ class Trainer:
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = ICNet(target_size, self.datagen.n_classes, is_debug=is_debug)
         elif model_name == 'icnet_warp':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
-                                                   flow_with_diff=True, flip_enabled=not is_debug)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flip_enabled=not is_debug)
             model = ICNetWarp(target_size, self.datagen.n_classes, is_debug=is_debug)
         else:
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0,
-                                                   flow_with_diff=True, flip_enabled=not is_debug)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flip_enabled=not is_debug)
             model = MobileUNetWarp2(target_size, self.datagen.n_classes, is_debug=is_debug)
 
         # -------------  set multi gpu model
@@ -171,16 +168,7 @@ class Trainer:
             restart_epoch, restart_run_name, weights_file, batch_size = self.get_last_epoch()
 
             if weights_file is not None:
-                self.model.load_model(
-                    weights_file,
-                    custom_objects={
-                        # 'dice_coef': metrics.dice_coef,
-                        'precision': metrics.precision,
-                        'recall': metrics.recall,
-                        'f1_score': metrics.f1_score,
-                        'mean_iou': metrics.mean_iou
-                    }
-                )
+                self.model.load_model(weights_file)
 
         return restart_epoch, restart_run_name, batch_size
 
@@ -270,7 +258,7 @@ class Trainer:
                                                     losswise_params['optimizer']['decay'])
 
         losswise_callback = LosswiseKerasCallback(
-            tag=run_name,
+            tag=self.model.name + '|' + run_name,
             params=losswise_params
         )
         self.train_callbacks.append(losswise_callback)
@@ -288,7 +276,8 @@ class Trainer:
             validation_steps=val_steps,
             callbacks=self.train_callbacks,
             max_queue_size=20,
-            use_multiprocessing=True
+            use_multiprocessing=True,
+            shuffle=False
         )
 
         # save final model

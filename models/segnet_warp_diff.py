@@ -5,7 +5,7 @@ from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooli
 from keras.models import Model
 
 from base_model import BaseModel
-from layers import tf_warp
+from layers import Warp, netwarp_module
 
 
 class SegNetWarpDiff(BaseModel):
@@ -15,22 +15,6 @@ class SegNetWarpDiff(BaseModel):
         self._kernel_size = (3, 3)
 
         super(SegNetWarpDiff, self).__init__(target_size, n_classes, is_debug)
-
-    def netwarp_module(self, img_old, img_new, flo, diff):
-        x = concatenate([img_old, img_new, flo, diff])
-        x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
-        x = concatenate([flo, x])
-        transformed_flow = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
-        return transformed_flow
-
-    def warp(self, x):
-        img = x[0]
-        flow = x[1]
-        out_size = img.get_shape().as_list()[1:3]
-        out = tf_warp(img, flow, out_size)
-        return out
 
     def _block(self, input, filter_size, kernel_size, pool_size):
         out = Convolution2D(filter_size, kernel_size, padding='same')(input)
@@ -44,12 +28,11 @@ class SegNetWarpDiff(BaseModel):
         img_old = Input(shape=self.target_size + (3,), name='data_old')
         img_new = Input(shape=self.target_size + (3,), name='data_new')
         flo = Input(shape=self.target_size + (2,), name='data_flow')
-        diff = Input(shape=self.target_size + (3,), name='data_diff')
 
-        all_inputs = [img_old, img_new, flo, diff]
+        all_inputs = [img_old, img_new, flo]
 
         # encoder
-        transformed_flow = self.netwarp_module(img_old, img_new, flo, diff)
+        transformed_flow = netwarp_module(img_old, img_new, flo)
 
         flow1 = MaxPooling2D(pool_size=self._pool_size, name='flow_down_1')(transformed_flow)
         flow2 = MaxPooling2D(pool_size=self._pool_size, name='flow_down_2')(flow1)
@@ -59,7 +42,7 @@ class SegNetWarpDiff(BaseModel):
         new_branch = self._block(img_new, self._filter_size, self._kernel_size, self._pool_size)
         old_branch = self._block(img_old, self._filter_size, self._kernel_size, self._pool_size)
 
-        warped1 = Lambda(self.warp, name="warp1")([old_branch, flow1])
+        warped1 = Warp(name="warp1")([old_branch, flow1])
         out = Add()([warped1, new_branch])
 
         # warped1 = self._block(warped1, 128, kernel_size, pool_size)

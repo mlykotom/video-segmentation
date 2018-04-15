@@ -1,80 +1,22 @@
-import keras
-import keras.backend as K
-import tensorflow as tf
-from keras.engine import Layer
-from keras.layers import Activation, BatchNormalization, concatenate
+from keras.layers import Activation, BatchNormalization
 from keras.layers import Add
 from keras.layers import Conv2D
 from keras.layers import Input
-from keras.layers import Lambda
 from keras.layers import ZeroPadding2D
 
 from icnet import ICNet
-from layers import BilinearUpSampling2D
-from layers import tf_warp
-
-
-class FlowFilter(Layer):
-    def __init__(self, init_value=1.0, **kwargs):
-        self.init_value = init_value
-        super(FlowFilter, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        print(input_shape)
-
-        self.fil = self.add_weight(
-            name='filter',
-            # shape=(1,),
-            shape=input_shape,
-            initializer=keras.initializers.Constant(self.init_value),
-            trainable=True,
-            dtype='float32'
-        )
-
-        super(FlowFilter, self).build(input_shape)
-
-    def call(self, inputs, **kwargs):
-        return K.tf.multiply(inputs, self.fil, name='flow_masked')
-        # return K.tf.where(K.tf.greater(K.tf.abs(inputs), self.fil), inputs, inputs)
-
-
-class Warp(Lambda):
-    @staticmethod
-    def _warp(x):
-        img = x[0]
-        flow = x[1]
-        # flow = FlowFilter()(flow)
-
-        out_size = img.get_shape().as_list()[1:3]
-        resized_flow = Lambda(lambda image: tf.image.resize_bilinear(image, out_size))(flow)
-        out = tf_warp(img, resized_flow, out_size)
-        out = BatchNormalization()(out)
-        return out
-
-    def __init__(self, **kwargs):
-        super(Warp, self).__init__(self._warp, **kwargs)
+from layers import BilinearUpSampling2D, Warp, netwarp_module
 
 
 class ICNetWarp(ICNet):
-
-    def netwarp_module(self, img_old, img_new, flo, diff):
-        x = concatenate([img_old, img_new, flo, diff])
-        x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-        x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
-        x = concatenate([flo, x])
-        x = BatchNormalization()(x)
-        x = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
-        return x
 
     def _create_model(self):
         img_old = Input(shape=self.target_size + (3,), name='data_old')
         img_new = Input(shape=self.target_size + (3,), name='data_new')
         flo = Input(shape=self.target_size + (2,), name='data_flow')
-        diff = Input(shape=self.target_size + (3,), name='data_diff')
 
-        all_inputs = [img_old, img_new, flo, diff]
-        transformed_flow = self.netwarp_module(img_old, img_new, flo, diff)
+        all_inputs = [img_old, img_new, flo]
+        transformed_flow = netwarp_module(img_old, img_new, flo)
 
         x = img_new
 
@@ -112,6 +54,13 @@ class ICNetWarp(ICNet):
         y = BilinearUpSampling2D(name='sub12_sum_interp')(y)
 
         return self.out_block(all_inputs, y, aux_1, aux_2)
+
+    def get_custom_objects(self):
+        custom_objects = super(ICNetWarp, self).get_custom_objects()
+        custom_objects.update({
+            'Warp': Warp,
+        })
+        return custom_objects
 
 
 if __name__ == '__main__':

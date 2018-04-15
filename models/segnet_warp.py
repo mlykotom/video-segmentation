@@ -5,7 +5,7 @@ from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooli
 from keras.models import Model
 
 from base_model import BaseModel
-from layers import tf_warp
+from layers import Warp
 
 
 class SegNetWarp(BaseModel):
@@ -29,30 +29,6 @@ class SegNetWarp(BaseModel):
 
         all_inputs = [img_old, img_new, flo]
 
-        def warp_test(x):
-            img = x[0]
-            flow = x[1]
-
-            out_size = img.get_shape().as_list()[1:3]
-            flow_size = flow.get_shape().as_list()[1:3]
-
-            # print(out_size, flow_size, flow_size[0] / out_size[0] / pool_size[0])
-
-            if out_size < flow_size:
-                how_many = flow_size[0] / out_size[0] / pool_size[0]
-                for _ in range(1, how_many):
-                    flow = MaxPooling2D(pool_size=pool_size)(flow)
-
-            out = tf_warp(img, flow, out_size)
-            return out
-
-        def warp(x):
-            img = x[0]
-            flow = x[1]
-            out_size = img.get_shape().as_list()[1:3]
-            out = tf_warp(img, flow, out_size)
-            return out
-
         # encoder
         flow1 = MaxPooling2D(pool_size=pool_size, name='flow_down_1')(flo)
         flow2 = MaxPooling2D(pool_size=pool_size, name='flow_down_2')(flow1)
@@ -62,7 +38,7 @@ class SegNetWarp(BaseModel):
         new_branch = self._block(img_new, filter_size, kernel_size, pool_size)
         old_branch = self._block(img_old, filter_size, kernel_size, pool_size)
 
-        warped2 = Lambda(warp, name="warp1")([old_branch, flow1])
+        warped2 = Warp(name="warp1")([old_branch, flow1])
         warped2 = self._block(warped2, 128, kernel_size, pool_size)
         warped2 = self._block(warped2, 256, kernel_size, pool_size)
         warped2 = self._block(warped2, 512, kernel_size, pool_size=None)
@@ -70,7 +46,7 @@ class SegNetWarp(BaseModel):
         new_branch2 = self._block(new_branch, 128, kernel_size, pool_size)
         old_branch2 = self._block(old_branch, 128, kernel_size, pool_size)
 
-        warped3 = Lambda(warp, name="warp2")([old_branch2, flow2])
+        warped3 = Warp(name="warp2")([old_branch2, flow2])
         warped3 = self._block(warped3, 256, kernel_size, pool_size)
         warped3 = self._block(warped3, 512, kernel_size, pool_size=None)
 
@@ -80,10 +56,10 @@ class SegNetWarp(BaseModel):
         new_branch4 = self._block(new_branch3, 512, kernel_size, pool_size=None)
         old_branch4 = self._block(old_branch3, 512, kernel_size, pool_size=None)
 
-        warped4 = Lambda(warp, name="warp3")([old_branch4, flow3])
+        warped4 = Warp(name="warp3")([old_branch4, flow3])
         out = Add()([warped2, warped3, warped4, new_branch4])
 
-        # warped = Lambda(warp_test, name="warp")([old_branch, flo])
+        # warped = Warp(name="warp")([old_branch, flo])
         # out = concatenate([warped, new_branch])
 
         # out = new_branch

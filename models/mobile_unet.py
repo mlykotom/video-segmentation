@@ -3,7 +3,7 @@ import keras.backend as K
 from keras import Input
 from keras.applications import mobilenet
 from keras.applications.mobilenet import DepthwiseConv2D
-from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, Dropout, SpatialDropout2D
+from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, SpatialDropout2D
 from keras.models import Model
 
 from base_model import BaseModel
@@ -22,7 +22,7 @@ class MobileUNet(BaseModel):
         super(MobileUNet, self).__init__(target_size, n_classes, is_debug)
 
     @staticmethod
-    def _conv_block(inputs, filters, alpha, kernel=(3, 3), strides=(1, 1), block_id=1):
+    def _conv_block(inputs, filters, alpha, kernel=(3, 3), strides=(1, 1), block_id=1, prefix=''):
         """Adds an initial convolution layer (with batch normalization and relu6).
 
         # Arguments
@@ -74,12 +74,13 @@ class MobileUNet(BaseModel):
                    padding='same',
                    use_bias=False,
                    strides=strides,
-                   name='conv_%d' % block_id)(inputs)
-        x = BatchNormalization(axis=channel_axis, name='conv_%d_bn' % block_id)(x)
-        return Activation(mobilenet.relu6, name='conv_%d_relu' % block_id)(x)
+                   name='%sconv_%d' % (prefix, block_id))(inputs)
+        x = BatchNormalization(axis=channel_axis, name='%sconv_%d_bn' % (prefix, block_id))(x)
+        return Activation(mobilenet.relu6, name='%sconv_%d_relu' % (prefix, block_id))(x)
 
     @staticmethod
-    def _depthwise_conv_block(inputs, pointwise_conv_filters, alpha, depth_multiplier=1, strides=(1, 1), block_id=1):
+    def _depthwise_conv_block(inputs, pointwise_conv_filters, alpha, depth_multiplier=1, strides=(1, 1), block_id=1,
+                              prefix=''):
         """Adds a depthwise convolution block.
 
         A depthwise convolution block consists of a depthwise conv,
@@ -135,17 +136,17 @@ class MobileUNet(BaseModel):
                             depth_multiplier=depth_multiplier,
                             strides=strides,
                             use_bias=False,
-                            name='conv_dw_%d' % block_id)(inputs)
-        x = BatchNormalization(axis=channel_axis, name='conv_dw_%d_bn' % block_id)(x)
-        x = Activation(mobilenet.relu6, name='conv_dw_%d_relu' % block_id)(x)
+                            name='%sconv_dw_%d' % (prefix, block_id))(inputs)
+        x = BatchNormalization(axis=channel_axis, name='%sconv_dw_%d_bn' % (prefix, block_id))(x)
+        x = Activation(mobilenet.relu6, name='%sconv_dw_%d_relu' % (prefix, block_id))(x)
 
         x = Conv2D(pointwise_conv_filters, (1, 1),
                    padding='same',
                    use_bias=False,
                    strides=(1, 1),
-                   name='conv_pw_%d' % block_id)(x)
-        x = BatchNormalization(axis=channel_axis, name='conv_pw_%d_bn' % block_id)(x)
-        return Activation(mobilenet.relu6, name='conv_pw_%d_relu' % block_id)(x)
+                   name='%sconv_pw_%d' % (prefix, block_id))(x)
+        x = BatchNormalization(axis=channel_axis, name='%sconv_pw_%d_bn' % (prefix, block_id))(x)
+        return Activation(mobilenet.relu6, name='%sconv_pw_%d_relu' % (prefix, block_id))(x)
 
     def _create_model(self):
         input = Input(shape=(self.target_size[0], self.target_size[1], 3))
@@ -223,11 +224,14 @@ class MobileUNet(BaseModel):
 
         return Model(input, x)
 
-    custom_objects = {
-        'relu6': mobilenet.relu6,
-        'DepthwiseConv2D': mobilenet.DepthwiseConv2D,
-        'BilinearUpSampling2D': BilinearUpSampling2D,
-    }
+    def get_custom_objects(self):
+        parent_objects = super(MobileUNet, self).get_custom_objects()
+        parent_objects.update({
+            'relu6': mobilenet.relu6,
+            'DepthwiseConv2D': mobilenet.DepthwiseConv2D,
+            'BilinearUpSampling2D': BilinearUpSampling2D,
+        })
+        return parent_objects
 
 
 if __name__ == '__main__':

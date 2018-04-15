@@ -13,7 +13,7 @@ model = 'segnet_warp_diff'
 print("-- model %s" % model)
 
 if model == 'segnet_warp_diff':
-    datagen = CityscapesFlowGenerator(config.data_path(), flow_with_diff=True)
+    datagen = CityscapesFlowGenerator(config.data_path())
     model = SegNetWarpDiff(config.target_size(), datagen.n_classes)
     # model.k.load_weights('../../weights/city/SegNetWarpDiff/warp_diff.h5')
     model.k.load_weights('/home/mlyko/weights/city/SegNetWarpDiff/diff_p0_w123_s04_aug.h5')

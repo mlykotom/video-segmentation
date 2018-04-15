@@ -66,16 +66,12 @@ def mean_iou(y_true, y_pred, smooth=None, axis=-1):
 
     # correctly classified
     clf_pred = K.one_hot(K.argmax(y_pred_reshaped), num_classes=true_shape[-1])
-    equal_entries = K.cast(
-        K.equal(clf_pred, y_true_reshaped), dtype='float32') * y_true_reshaped
+    equal_entries = K.cast(K.equal(clf_pred, y_true_reshaped), dtype='float32') * y_true_reshaped
 
     intersection = K.sum(equal_entries, axis=1)
-    union_per_class = K.sum(
-        y_true_reshaped, axis=1) + K.sum(
-        y_pred_reshaped, axis=1)
+    union_per_class = K.sum(y_true_reshaped, axis=1) + K.sum(y_pred_reshaped, axis=1)
 
     # smooth added to avoid dividing by zero
-    iou = (intersection + smooth) / (
-            (union_per_class - intersection) + smooth)
+    iou = (intersection + smooth) / ((union_per_class - intersection) + smooth)
 
     return K.mean(iou)

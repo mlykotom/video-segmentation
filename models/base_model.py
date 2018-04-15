@@ -7,9 +7,6 @@ from keras import optimizers
 class BaseModel:
     __metaclass__ = ABCMeta
 
-    """dictionary of custom objects (as per keras definition)"""
-    custom_objects = {}
-
     def __init__(self, target_size, n_classes, is_debug=False, for_training=True):
         """
         :param tuple target_size: (height, width)
@@ -38,13 +35,21 @@ class BaseModel:
         """
 
         custom_objects = custom_objects.copy() or {}
-        custom_objects.update(self.custom_objects)
+        custom_objects.update(self.get_custom_objects())
 
-        self._model = keras.models.load_model(
+        self._model.load_weights(
             filepath=filepath,
-            custom_objects=custom_objects,
-            compile=compile_model
+            by_name=True
         )
+
+        if compile_model:
+            self.compile()
+
+            # self._model = keras.models.load_model(
+        #     filepath=filepath,
+        #     custom_objects=custom_objects,
+        #     compile=compile_model
+        # )
         return self
 
     @abstractmethod
@@ -107,21 +112,31 @@ class BaseModel:
 
     def metrics(self):
         import metrics
-
         return [
-            metrics.precision,
-            metrics.recall,
-            metrics.f1_score,
-            keras.metrics.categorical_accuracy,
+            # metrics.precision,
+            # metrics.recall,
+            # metrics.f1_score,
+            # keras.metrics.categorical_accuracy,
             metrics.mean_iou
         ]
 
+    def get_custom_objects(self):
+        """dictionary of custom objects (as per keras definition)"""
+        import metrics
+        return {
+            # 'dice_coef': metrics.dice_coef,
+            # 'precision': metrics.precision,
+            # 'recall': metrics.recall,
+            # 'f1_score': metrics.f1_score,
+            'mean_iou': metrics.mean_iou
+        }
+
     def optimizer_params(self):
         if self.is_debug:
-            return {'lr': 0.0002, 'decay': 0.0991}
+            # return {'lr': 0.0002, 'decay': 0.0991} # for 120 samples
+            return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
         else:
-            # return {'lr': 0.0009, 'decay': 0.005}
-            return {'lr': 0.001, 'decay': 0.005}
+            return {'lr': 0.001, 'decay': 0.005}  # running on mlyko.can
 
     def params(self):
         return {
@@ -133,7 +148,8 @@ class BaseModel:
         }
 
     def optimizer(self):
-        return optimizers.Adam()
+        params = self.optimizer_params()
+        return optimizers.Adam(lr=params['lr'], decay=params['decay'])
 
     def compile(self):
         self._model.compile(
