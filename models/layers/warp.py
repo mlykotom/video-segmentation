@@ -1,12 +1,26 @@
 import keras
 import keras.backend as K
 import tensorflow as tf
+from keras import Input, Model
+from keras.constraints import Constraint
 from keras.engine import Layer
 from keras.layers import Lambda, Conv2D, concatenate
 
 
+class MinMaxConstraint(Constraint):
+    def __init__(self, min=0., max=1.):
+        self.min = min
+        self.max = max
+
+    def __call__(self, w):
+        w = K.maximum(self.min, K.minimum(self.max, w))
+        # w *= K.cast(K.greater_equal(w, self.min), K.floatx())
+        # w *= K.cast(K.less_equal(w, self.max), K.floatx())
+        return w
+
+
 class LinearCombination(Layer):
-    def __init__(self, init_weights=[0.9, 0.1], **kwargs):
+    def __init__(self, init_weights=[1., 1.], **kwargs):
         self.init_weights = init_weights
         super(LinearCombination, self).__init__(**kwargs)
 
@@ -15,18 +29,23 @@ class LinearCombination(Layer):
             raise Exception("Input shapes must be the same to LinearCombination layer")
 
         channels = input_shape[0][-1]
+
+        # self.inp = K.constant(1.0)
+
         self.w1 = self.add_weight(
             name='w1',
             shape=(channels,),
             initializer=keras.initializers.Constant(self.init_weights[0]),
-            trainable=True
+            trainable=True,
+            constraint=MinMaxConstraint()
         )
 
         self.w2 = self.add_weight(
             name='w2',
             shape=(channels,),
             initializer=keras.initializers.Constant(self.init_weights[1]),
-            trainable=True
+            trainable=True,
+            constraint=MinMaxConstraint()
         )
 
         super(LinearCombination, self).build(input_shape)
@@ -35,11 +54,28 @@ class LinearCombination(Layer):
         return input_shape[0]
 
     def call(self, inputs, **kwargs):
-        return K.tf.multiply(inputs[0], self.w1) + K.tf.multiply(inputs[1], self.w2)
+        # trim_w1 = K.tf.minimum(K.tf.maximum(0., self.w1), 1.)
+        # trim_w2 = K.tf.minimum(K.tf.maximum(0., self.w2), 1.)
+
+        return K.tf.multiply(self.w1, inputs[0]) + K.tf.multiply(self.w2, inputs[1])
 
 
+# class FlowCNN(Model):
+
+import cv2
+
+import numpy as np
 def netwarp_module(img_old, img_new, flo):
-    diff = keras.layers.Subtract(name='data_diff')([img_old, img_new])
+    img_old_gray = Lambda(lambda inp: tf.image.rgb_to_grayscale(inp))(img_old)
+    img_new_gray = Lambda(lambda inp: tf.image.rgb_to_grayscale(inp))(img_new)
+
+    # diff = keras.layers.Subtract(name='data_diff')([img_old, img_new])
+    diff = keras.layers.Subtract(name='data_diff')([img_old_gray, img_new_gray])
+
+    # TODO erode dilate
+    # TODO learn the kernel
+    # kernel = tf.Constant(np.ones((5,5),np.uint8))
+    # tf.nn.erosion2d(tf.nn.dilation2d(diff, ),)
 
     x = concatenate([img_old, img_new, flo, diff])
     x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)

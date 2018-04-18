@@ -5,26 +5,6 @@ from time import gmtime, strftime
 import config
 from trainer import Trainer
 
-
-def train(dataset_path, model_name='mobile_unet', epochs=200, run_name='', debug_samples=0, restart_training=False,
-          batch_size=None, n_gpu=1, summaries=False, early_stopping=20):
-    target_size = config.target_size()
-    batch_size = batch_size or 2
-
-    trainer = Trainer(model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping)
-    trainer.model.compile()
-
-    if summaries:
-        trainer.summaries()
-
-    # train model
-    trainer.fit_model(
-        run_name=run_name,
-        epochs=epochs,
-        restart_training=restart_training,
-    )
-
-
 if __name__ == '__main__':
     def parse_arguments():
         parser = argparse.ArgumentParser(description='Train model in keras')
@@ -64,6 +44,14 @@ if __name__ == '__main__':
 
         parser.add_argument('--gid',
                             help='GPU id',
+                            default=None)
+
+        parser.add_argument('-lr',
+                            help='Learning rate',
+                            default=None)
+
+        parser.add_argument('--dec',
+                            help='Learning rate decay',
                             default=None)
 
         parser.add_argument(
@@ -108,17 +96,31 @@ if __name__ == '__main__':
             os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
 
     try:
-        train(
-            dataset_path=dataset_path,
-            model_name=args.model,
-            epochs=int(args.epochs),
-            run_name=args.name,
-            debug_samples=int(args.debug),
-            restart_training=args.restart,
-            batch_size=int(args.batch),
-            n_gpu=int(args.gpus),
-            summaries=args.summaries,
-            early_stopping=int(args.stop)
+        epochs = int(args.epochs)
+        target_size = config.target_size()
+        batch_size = int(args.batch) or 2
+        debug_samples = int(args.debug)
+        early_stopping = int(args.stop)
+        summaries = args.summaries
+        n_gpu = int(args.gpus)
+
+        restart_training = args.restart
+        run_name = args.name
+
+        trainer = Trainer(args.model, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping)
+        trainer.model.compile(
+            lr=float(args.lr) if args.lr is not None else None,
+            lr_decay=float(args.dec) if args.dec is not None else 0.
+        )
+
+        if summaries:
+            trainer.summaries()
+
+        # train model
+        trainer.fit_model(
+            run_name=run_name,
+            epochs=epochs,
+            restart_training=restart_training
         )
     except KeyboardInterrupt:
         print("Keyboard interrupted")

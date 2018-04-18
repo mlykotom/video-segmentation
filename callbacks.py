@@ -84,6 +84,19 @@ class CustomTensorBoard(TensorBoard):
         lr_value = K.eval(lr_with_decay)
         print("--- LR:", lr_value)
         logs.update({"learning_rate": np.array([lr_value])})
+
+        try:
+            lc_weights = self._proper_model.get_layer('linear_combination_1').get_weights()
+            lc = {
+                "lc_1_w1": np.average(lc_weights[0]),
+                "lc_1_w2": np.average(lc_weights[1])
+            }
+            logs.update(lc)
+            print("--- LC", lc_weights[0], lc_weights[1])
+        except ValueError:
+            # THIS LAYER WAS NOT FOUND, just skip
+            pass
+
         super(CustomTensorBoard, self).on_epoch_end(epoch, logs)
 
 
@@ -125,7 +138,6 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
                 "run_name": self.run_name,
                 "batch_size": self.batch_size
             }, fp)
-
 
 # import matplotlib.pyplot as plt
 

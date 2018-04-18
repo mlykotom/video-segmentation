@@ -19,7 +19,7 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
             dataset_path=dataset_path,
             debug_samples=debug_samples,
             how_many_prev=how_many_prev,
-            prev_skip=1,
+            prev_skip=prev_skip,
             flip_enabled=flip_enabled
         )
 

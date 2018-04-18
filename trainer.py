@@ -18,7 +18,7 @@ from models import *
 class Trainer:
     train_callbacks = []
 
-    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=20):
+    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10):
         is_debug = debug_samples > 0
 
         if is_debug:
@@ -35,6 +35,8 @@ class Trainer:
         print("-- Number of GPUs used %d" % self.n_gpu)
         print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
+        prev_skip = 1
+
         # -------------  pick the right model with proper generator
         if model_name == 'segnet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
@@ -46,13 +48,13 @@ class Trainer:
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = MobileUNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet':
-            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
+            self.datagen = CityscapesGeneratorForICNet(dataset_path, debug_samples=debug_samples)
             model = ICNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flip_enabled=not is_debug)
-            model = ICNetWarp(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug)
+            model = ICNetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         else:
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=0, flip_enabled=not is_debug)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug)
             model = MobileUNetWarp4(target_size, self.datagen.n_classes, debug_samples=debug_samples)
 
         # -------------  set multi gpu model
@@ -191,17 +193,16 @@ class Trainer:
         self.train_callbacks.append(checkpoint)
 
         # ------------- early stopping
-        # TODO turn on early stopping
         # if not self.is_debug:
-        #     early_stopping = keras.callbacks.EarlyStopping(
-        #         monitor='val_loss',
-        #         min_delta=0,
-        #         patience=self._early_stopping,
-        #         verbose=1,
-        #         mode='min'
-        #     )
-        #
-        #     self.train_callbacks.append(early_stopping)
+        early_stopping = keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            min_delta=0,
+            patience=30 if self.is_debug else self._early_stopping,
+            verbose=1,
+            mode='min'
+        )
+
+        self.train_callbacks.append(early_stopping)
 
         # ------------- lr scheduler
         # lr_base = 0.001  # self.model.optimizer().lr  # * (float(self.batch_size) / 16)
@@ -252,18 +253,12 @@ class Trainer:
 
         losswise_callback = LosswiseKerasCallback(
             tag=self.model.name + '|' + run_name,
-            params=losswise_params
+            params=losswise_params,
+            display_interval=2
         )
         self.train_callbacks.append(losswise_callback)
 
         self.prepare_callbacks(run_name, epochs)
-
-        def print_weights_lc(batch, logs):
-            weights = self.model.k.get_layer('linear_combination_1').get_weights()
-            print("LC avg", np.average(weights[0]), np.average(weights[1]))
-
-        print_weights = LambdaCallback(on_epoch_end=print_weights_lc)
-        self.train_callbacks.append(print_weights)
 
         self.model.k.fit_generator(
             generator=train_generator,

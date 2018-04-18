@@ -174,6 +174,9 @@ if __name__ == '__main__':
                 last_frame = frame
 
             flow = datagen.calc_optical_flow(last_frame, frame)
+
+            # TODO                 self.optical_flow.setUseSpatialPropagation(True)
+
             frame_norm = datagen.normalize(frame, config.target_size())
             last_frame_norm = datagen.normalize(last_frame, config.target_size())
 

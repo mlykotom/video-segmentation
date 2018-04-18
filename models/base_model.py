@@ -132,6 +132,8 @@ class BaseModel:
             'mean_iou': metrics.mean_iou
         }
 
+    lr_params = None
+
     def optimizer_params(self):
         if self.debug_samples == 1:
             # return {'lr': 0.0001, 'decay': 0.0999}  # for 1 samples
@@ -139,34 +141,48 @@ class BaseModel:
             return {'lr': 0.001, 'decay': 0.03}  # for 1 samples
             # return {'lr': 0.0001, 'decay': 0.}  # for 1 samples
         elif self.debug_samples == 5:
-            return {'lr': 0.002, 'decay': 0.0099
-                    }  # for 5 samples
+            return {'lr': 0.0012, 'decay': 0.0099999}  # for 5 samples
         elif self.debug_samples == 120:
             return {'lr': 0.0002, 'decay': 0.0991}  # for 120 samples
         elif self.debug_samples == 20:
             return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
         else:
-            return {'lr': 0.001, 'decay': 0.005}  # running on mlyko.can
+            # return {'lr': 0.001, 'decay': 0.009}
+            return {'lr': 0.0011, 'decay': 0.0099}
+
+    def _optimizer_params(self):
+        if self.lr_params is not None:
+            return self.lr_params
+        else:
+            return self.optimizer_params()
 
     def params(self):
         return {
             'optimizer': {
                 'name': type(self.optimizer()).__name__,
-                'lr': self.optimizer_params()['lr'],
-                'decay': self.optimizer_params()['decay'],
+                'lr': self._optimizer_params()['lr'],
+                'decay': self._optimizer_params()['decay'],
             }
         }
 
     def optimizer(self):
-        params = self.optimizer_params()
+        params = self._optimizer_params()
         return optimizers.Adam(lr=params['lr'], decay=params['decay'])
 
-    def compile(self):
+    def loss_weights(self):
+        return None
+
+    def compile(self, lr=None, lr_decay=0.):
+        if lr is not None:
+            self.lr_params = {'lr': lr, 'decay': lr_decay}
+
         print("-- Optimizer: " + type(self.optimizer()).__name__)
-        print("---- Params: ", self.optimizer_params())
+        print("---- Params: ", self._optimizer_params())
+        print("---- For Training: ", self.training_phase)
 
         self._model.compile(
             loss=keras.losses.categorical_crossentropy,
             optimizer=self.optimizer(),
-            metrics=self.metrics()
+            metrics=self.metrics(),
+            loss_weights=self.loss_weights()
         )

@@ -13,6 +13,7 @@ class CityscapesGenerator(BaseDataGenerator):
         self._file_pattern = re.compile("(?P<city>[^_]*)_(?:[^_]+)_(?P<frame>[^_]+)_gtFine_color\.png")
         self._how_many_prev = how_many_prev
         self._prev_skip = prev_skip
+        print("-- Cityscapes Previous skip", prev_skip)
         super(CityscapesGenerator, self).__init__(
             dataset_path,
             debug_samples,

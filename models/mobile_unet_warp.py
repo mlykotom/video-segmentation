@@ -123,13 +123,20 @@ class MobileUNetWarp(MobileUNet):
         self.b00, self.b01, self.b03, self.b05, self.b11, self.b13 = self.frame_branch(img_new)
 
         # -------- WARPING
-        self.warped_inp = Warp(name="warp_inp")([img_old, transformed_flow])
-        self.warped0 = Warp(name="warp0")([self.old_b00, transformed_flow])
-        self.warped1 = Warp(name="warp1")([self.old_b01, transformed_flow])
-        self.warped2 = Warp(name="warp2")([self.old_b03, transformed_flow])
-        self.warped3 = Warp(name="warp3")([self.old_b05, transformed_flow])
-        self.warped4 = Warp(name="warp4")([self.old_b11, transformed_flow])
-        self.warped5 = Warp(name="warp5")([self.old_b13, transformed_flow])
+        if -1 in self.warp_decoder:
+            self.warped_inp = Warp(name="warp_inp")([img_old, transformed_flow])
+        if 0 in self.warp_decoder:
+            self.warped0 = Warp(name="warp0")([self.old_b00, transformed_flow])
+        if 1 in self.warp_decoder:
+            self.warped1 = Warp(name="warp1")([self.old_b01, transformed_flow])
+        if 2 in self.warp_decoder:
+            self.warped2 = Warp(name="warp2")([self.old_b03, transformed_flow])
+        if 3 in self.warp_decoder:
+            self.warped3 = Warp(name="warp3")([self.old_b05, transformed_flow])
+        if 4 in self.warp_decoder:
+            self.warped4 = Warp(name="warp4")([self.old_b11, transformed_flow])
+        if 5 in self.warp_decoder:
+            self.warped5 = Warp(name="warp5")([self.old_b13, transformed_flow])
 
         # -------- DECODER
         x = self.decoder()
