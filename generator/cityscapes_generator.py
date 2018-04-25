@@ -88,6 +88,11 @@ class CityscapesGenerator(BaseDataGenerator):
         norm /= self._config['std']
         return norm
 
+    def denormalize(self, rgb):
+        rgb *= self._config['std']
+        rgb += self._config['mean']
+        return rgb
+
 
 if __name__ == '__main__':
     if __package__ is None:

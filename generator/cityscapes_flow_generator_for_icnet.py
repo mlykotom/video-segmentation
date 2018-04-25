@@ -40,7 +40,7 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
                 img_new = self._prep_img(type, img_new_path, target_size, apply_flip)
 
                 # reverse flow
-                flow = self.calc_optical_flow(img_new, img_old, 'dis')
+                flow = self.calc_optical_flow(img_new, img_old)
 
                 flow_arr.append(flow)
                 in_arr[2].append(flow)

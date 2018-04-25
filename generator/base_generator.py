@@ -234,7 +234,12 @@ class BaseDataGenerator:
 class BaseFlowGenerator(BaseDataGenerator):
     __metaclass__ = ABCMeta
 
-    def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
+    def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1, optical_flow_type='dis'):
+        if not hasattr(self, 'optical_flow_type'):
+            self.optical_flow_type = optical_flow_type
+
+        print("-- Optical flow type", self.optical_flow_type)
+
         super(BaseFlowGenerator, self).__init__(
             dataset_path,
             debug_samples=debug_samples,
@@ -244,18 +249,18 @@ class BaseFlowGenerator(BaseDataGenerator):
             brightness=brightness
         )
 
-    def calc_optical_flow(self, old, new, flow_type='dis', with_time_difference=False):
+    def calc_optical_flow(self, old, new, with_time_difference=False):
         old_gray = cv2.cvtColor(old, cv2.COLOR_RGB2GRAY)
         new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 
         start = datetime.datetime.now()
-        if flow_type == 'dis':
-            if not hasattr(self, 'optical_flow') or self.optical_flow is None:
-                self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
-
-            flow = self.optical_flow.calc(old_gray, new_gray, None)
-        else:
-            flow = cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+        # if self.optical_flow_type == 'dis':
+        #     if not hasattr(self, 'optical_flow') or self.optical_flow is None:
+        #         self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
+        #
+        #     flow = self.optical_flow.calc(old_gray, new_gray, None)
+        # else:
+        flow = cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
 
         end = datetime.datetime.now()
         diff = end - start
@@ -282,7 +287,7 @@ class BaseFlowGenerator(BaseDataGenerator):
 
                 img = cv2.resize(self._load_img(img_old_path), target_size[::-1])
                 img2 = cv2.resize(self._load_img(img_new_path), target_size[::-1])
-                flow = self.calc_optical_flow(img2, img, 'dis')
+                flow = self.calc_optical_flow(img2, img)
 
                 input1 = self.normalize(img, target_size=None)
                 input2 = self.normalize(img2, target_size=None)

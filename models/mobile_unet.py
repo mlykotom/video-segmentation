@@ -230,12 +230,6 @@ class MobileUNet(BaseModel):
         })
         return parent_objects
 
-    def optimizer_params(self):
-        if not self.is_debug:
-            return {'lr': 0.001, 'decay': 0.009}
-        else:
-            return super(MobileUNet, self).optimizer_params()
-
 
 if __name__ == '__main__':
     target_size = 288, 480

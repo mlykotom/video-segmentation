@@ -138,13 +138,12 @@ if __name__ == '__main__':
     # model_left.k.load_weights(config.weights_path() + 'city/rel/SegNet/normal_eq_hist.h5')
     # model_left.compile()
 
-    model_left = MobileUNetWarp2(config.target_size(), datagen.n_classes)
-    # model_left.k.load_weights(config.weights_path() + 'city/rel/MobileUNetWarpmob_unet_b6_warp1_spat0.2.h5')
-    model_left.k.load_weights(config.weights_path() + 'city/rel/MobileUNetWarp2/omg_po_ranu.h5')
+    model_left = SegnetWarp2(config.target_size(), datagen.n_classes)
+    model_left.k.load_weights(config.weights_path() + 'city/rel/SegnetWarp2/random_normal_prev0b5_lr=0.000900_dec=0.050000.h5', by_name=True)
     model_left.compile()
 
-    model_right = SegNetWarpDiff123(config.target_size(), datagen.n_classes)
-    model_right.k.load_weights(config.weights_path() + 'city/rel/SegNetWarpDiff123/diff_p0_w123_s03_b4_dec0001_g2.h5')
+    model_right = SegNet(config.target_size(), datagen.n_classes)
+    model_right.k.load_weights(config.weights_path() + 'city/rel/SegNet/b4_lr=0.000900_dec=0.050000_2.h5', by_name=True)
     model_right.compile()
 
     print("-- models loaded %s|%s" % (model_left.name, model_right.name))
@@ -180,16 +179,15 @@ if __name__ == '__main__':
             frame_norm = datagen.normalize(frame, config.target_size())
             last_frame_norm = datagen.normalize(last_frame, config.target_size())
 
-            input = [
+            input_flow = [
                 np.array([last_frame_norm]),
                 np.array([frame_norm]),
                 np.array([flow]),
-                np.array([frame_norm - last_frame_norm])
             ]
 
             # np.array([frame_norm])
-            colored_left, diff_left = predict_frame(input, model_left, datagen)
-            colored_right, diff_right = predict_frame(input, model_right, datagen)
+            colored_left, diff_left = predict_frame(input_flow, model_left, datagen)
+            colored_right, diff_right = predict_frame(np.array([frame_norm]), model_right, datagen)
 
             img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             alpha_blended_both = (0.6 * colored_left + 0.4 * img).astype('uint8'), \

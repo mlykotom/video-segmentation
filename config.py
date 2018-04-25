@@ -39,6 +39,8 @@ def target_size():
     # return 288, 480
     # return (1052, 1914) # original
     return 256, 512
+    # return 512, 1024
+
 
 
 def weights_path():

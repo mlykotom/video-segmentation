@@ -1,98 +1,139 @@
-import keras
-from keras import Input
-from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Lambda, \
-    Add
-from keras.models import Model
+from keras.layers import Convolution2D, BatchNormalization, UpSampling2D, Activation, MaxPooling2D
 
-from base_model import BaseModel
-from layers import Warp
+from layers import *
+from segnet import SegNet
 
 
-class SegNetWarp(BaseModel):
-
-    def _block(self, input, filter_size, kernel_size, pool_size):
-        out = Convolution2D(filter_size, kernel_size, padding='same')(input)
-        out = BatchNormalization()(out)
-        out = Activation('relu')(out)
-        if pool_size is not None:
-            out = MaxPooling2D(pool_size=pool_size)(out)
-        return out
+class SegNetWarp(SegNet):
+    warp_decoder = []
 
     def _create_model(self):
-        filter_size = 64
-        pool_size = (2, 2)
-        kernel_size = (3, 3)
+        img_old = Input(self.input_shape, name='data_old')
+        img_new = Input(self.input_shape, name='data_new')
+        flo = Input(shape=self.target_size + (2,), name='data_flow')
 
-        img_old = Input(shape=self.target_size + (3,), name='data_old')
-        img_new = Input(shape=self.target_size + (3,), name='data_new')
-        flo = Input(shape=self.target_size + (2,), name='flow')
-
-        all_inputs = [img_old, img_new, flo]
+        transformed_flow = flow_cnn(img_old, img_new, flo)
 
         # encoder
-        flow1 = MaxPooling2D(pool_size=pool_size, name='flow_down_1')(flo)
-        flow2 = MaxPooling2D(pool_size=pool_size, name='flow_down_2')(flow1)
-        flow3 = MaxPooling2D(pool_size=pool_size, name='flow_down_3')(flow2)
+        block_0 = self.block_model(self.input_shape, 64, True, 1)
+        block_1 = self.block_model(block_0.output_shape[1:], 128, True, 2)
+        block_2 = self.block_model(block_1.output_shape[1:], 256, True, 3)
+        block_3 = self.block_model(block_2.output_shape[1:], 512, False, 4)
 
-        # new branch
-        new_branch = self._block(img_new, filter_size, kernel_size, pool_size)
-        old_branch = self._block(img_old, filter_size, kernel_size, pool_size)
+        out = block_0(img_new)
+        old_out = block_0(img_old)
 
-        warped2 = Warp(name="warp1")([old_branch, flow1])
-        warped2 = self._block(warped2, 128, kernel_size, pool_size)
-        warped2 = self._block(warped2, 256, kernel_size, pool_size)
-        warped2 = self._block(warped2, 512, kernel_size, pool_size=None)
+        if 0 in self.warp_decoder:
+            if not self.training_phase:
+                # TODO
+                input_block_0 = Input(block_0.output_shape[1:], name='prev_conv_block_0')
+                old_branch = input_block_0
+            else:
+                old_branch = old_out
 
-        new_branch2 = self._block(new_branch, 128, kernel_size, pool_size)
-        old_branch2 = self._block(old_branch, 128, kernel_size, pool_size)
+            out = netwarp(old_branch, out, transformed_flow)
 
-        warped3 = Warp(name="warp2")([old_branch2, flow2])
-        warped3 = self._block(warped3, 256, kernel_size, pool_size)
-        warped3 = self._block(warped3, 512, kernel_size, pool_size=None)
+        out = block_1(out)
+        old_out = block_1(old_out)
 
-        new_branch3 = self._block(new_branch2, 256, kernel_size, pool_size)
-        old_branch3 = self._block(old_branch2, 256, kernel_size, pool_size)
+        if 1 in self.warp_decoder:
+            if not self.training_phase:
+                # TODO
+                input_block_1 = Input(block_1.output_shape[1:], name='prev_conv_block_1')
+                old_branch = input_block_1
+            else:
+                old_branch = old_out
 
-        new_branch4 = self._block(new_branch3, 512, kernel_size, pool_size=None)
-        old_branch4 = self._block(old_branch3, 512, kernel_size, pool_size=None)
+            out = netwarp(old_branch, out, transformed_flow)
 
-        warped4 = Warp(name="warp3")([old_branch4, flow3])
-        out = Add()([warped2, warped3, warped4, new_branch4])
+        out = block_2(out)
+        old_out = block_2(old_out)
 
-        # warped = Warp(name="warp")([old_branch, flo])
-        # out = concatenate([warped, new_branch])
+        if 2 in self.warp_decoder:
+            if not self.training_phase:
+                # TODO
+                input_block_2 = Input(block_2.output_shape[1:], name='prev_conv_block_2')
+                old_branch = input_block_2
+            else:
+                old_branch = old_out
 
-        # out = new_branch
+            out = netwarp(old_branch, out, transformed_flow)
+
+        out = block_3(out)
+        old_out = block_3(old_out)
+
+        if 3 in self.warp_decoder:
+            if not self.training_phase:
+                # TODO
+                input_block_3 = Input(block_3.output_shape[1:], name='prev_conv_block_3')
+                old_branch = input_block_3
+            else:
+                old_branch = old_out
+
+            out = netwarp(old_branch, out, transformed_flow)
 
         # decoder
-        out = Convolution2D(512, kernel_size, padding='same')(out)
+        out = Convolution2D(512, self._kernel_size, padding='same')(out)
         out = BatchNormalization()(out)
 
-        out = UpSampling2D(size=pool_size)(out)
-        out = Convolution2D(256, kernel_size, padding='same')(out)
+        out = UpSampling2D(size=self._pool_size)(out)
+        out = Convolution2D(256, self._kernel_size, padding='same')(out)
         out = BatchNormalization()(out)
 
-        out = UpSampling2D(size=pool_size)(out)
-        out = Convolution2D(128, kernel_size, padding='same')(out)
+        out = UpSampling2D(size=self._pool_size)(out)
+        out = Convolution2D(128, self._kernel_size, padding='same')(out)
         out = BatchNormalization()(out)
 
-        out = UpSampling2D(size=pool_size)(out)
-        out = Convolution2D(filter_size, kernel_size, padding='same')(out)
+        out = UpSampling2D(size=self._pool_size)(out)
+        out = Convolution2D(self._filter_size, self._kernel_size, padding='same')(out)
         out = BatchNormalization()(out)
 
-        out = Convolution2D(self.n_classes, (1, 1), padding='same')(out)
+        out = Convolution2D(self.n_classes, (1, 1), activation='softmax', padding='same')(out)
 
-        out = Reshape((-1, self.n_classes))(out)
-        out = Activation('softmax')(out)
+        all_inputs = [img_old, img_new, flo]
+        if not self.training_phase:
+            if 0 in self.warp_decoder:
+                all_inputs.append(input_block_0)
+            if 1 in self.warp_decoder:
+                all_inputs.append(input_block_1)
+            if 2 in self.warp_decoder:
+                all_inputs.append(input_block_2)
 
         model = Model(inputs=all_inputs, outputs=[out])
-
         return model
 
 
+class SegnetWarp0(SegNetWarp):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+        self.warp_decoder.append(0)
+        super(SegnetWarp0, self).__init__(target_size, n_classes, debug_samples, for_training)
+
+
+class SegnetWarp1(SegNetWarp):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+        self.warp_decoder.append(1)
+        super(SegnetWarp1, self).__init__(target_size, n_classes, debug_samples, for_training)
+
+class SegnetWarp2(SegNetWarp):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+        self.warp_decoder.append(2)
+        super(SegnetWarp2, self).__init__(target_size, n_classes, debug_samples, for_training)
+
+class SegnetWarp3(SegNetWarp):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+        self.warp_decoder.append(3)
+        super(SegnetWarp3, self).__init__(target_size, n_classes, debug_samples, for_training)
+
+
+class SegnetWarp12(SegNetWarp):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+        self.warp_decoder.append(1)
+        self.warp_decoder.append(2)
+        super(SegnetWarp12, self).__init__(target_size, n_classes, debug_samples, for_training)
+
 if __name__ == '__main__':
     target_size = (288, 480)
-    model = SegNetWarp(target_size, 32)
+    model = SegnetWarp12(target_size, 34, for_training=True)
 
-    # print(model.summary())
-    keras.utils.plot_model(model.k, 'segnet_warp.png', show_shapes=True, show_layer_names=True)
+    print(model.summary())
+    model.plot_model()

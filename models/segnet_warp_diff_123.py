@@ -4,12 +4,12 @@ from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooli
     Add, SpatialDropout2D
 from keras.models import Model
 
-from segnet_warp_diff import SegNetWarpDiff
+from segnet_warp import SegNetWarp
 
 from layers import netwarp_module, Warp
 
 
-class SegNetWarpDiff123(SegNetWarpDiff):
+class SegNetWarpDiff123(SegNetWarp):
     def _create_model(self):
         img_old = Input(shape=self.target_size + (3,), name='data_old')
         img_new = Input(shape=self.target_size + (3,), name='data_new')
@@ -80,7 +80,7 @@ class SegNetWarpDiff123(SegNetWarpDiff):
 
 if __name__ == '__main__':
     target_size = (288, 480)
-    model = SegNetWarpDiff(target_size, 34)
+    model = SegNetWarp(target_size, 34)
 
     print(model.summary())
     keras.utils.plot_model(model.k, 'segnet_warp_diff.png', show_shapes=True, show_layer_names=True)

@@ -60,6 +60,12 @@ if __name__ == '__main__':
             default=strftime("%d%H:%M", gmtime())
         )
 
+        parser.add_argument(
+            '-o', '--optic',
+            help='Optical flow',
+            default='dis'
+        )
+
         args = parser.parse_args()
         return args
 
@@ -107,7 +113,9 @@ if __name__ == '__main__':
         restart_training = args.restart
         run_name = args.name
 
-        trainer = Trainer(args.model, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping)
+        optical_flow_type = args.optic
+
+        trainer = Trainer(args.model, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping, optical_flow_type=optical_flow_type)
         trainer.model.compile(
             lr=float(args.lr) if args.lr is not None else None,
             lr_decay=float(args.dec) if args.dec is not None else 0.

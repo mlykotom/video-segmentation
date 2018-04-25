@@ -92,7 +92,7 @@ class CustomTensorBoard(TensorBoard):
                 "lc_1_w2": np.average(lc_weights[1])
             }
             logs.update(lc)
-            print("--- LC", lc_weights[0], lc_weights[1])
+            # print("--- LC", lc_weights[0], lc_weights[1])
         except ValueError:
             # THIS LAYER WAS NOT FOUND, just skip
             pass

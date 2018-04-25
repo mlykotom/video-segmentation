@@ -14,7 +14,8 @@ from cityscapes_generator import CityscapesGenerator
 
 
 class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flip_enabled=False):
+    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flip_enabled=False, optical_flow_type='dis'):
+        self.optical_flow_type = optical_flow_type
         super(CityscapesFlowGenerator, self).__init__(
             dataset_path=dataset_path,
             debug_samples=debug_samples,
@@ -43,7 +44,7 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
                 img_new = self._prep_img(type, img_new_path, target_size, apply_flip)
 
                 # reverse flow
-                flow = self.calc_optical_flow(img_new, img_old, 'dis')
+                flow = self.calc_optical_flow(img_new, img_old)
                 flow_arr.append(flow)
 
                 input1 = self.normalize(img_old, target_size=None)
@@ -81,7 +82,7 @@ if __name__ == '__main__':
 
     datagen = CityscapesFlowGenerator(config.data_path())
 
-    batch_size = 3
+    batch_size = 1
     # target_size = 288, 480
     target_size = 256, 512
     # target_size = 1024, 2048  # orig size
@@ -101,8 +102,8 @@ if __name__ == '__main__':
         winner = datagen.calcWarp(old_img, optical_flow, target_size)
         cv2.imshow("winner", winner)
 
-        cv2.imshow("old", old_img)
-        cv2.imshow("new", new_img)
+        cv2.imshow("old", datagen.denormalize(old_img))
+        cv2.imshow("new", datagen.denormalize(new_img))
         cv2.imshow("flo", flow_bgr)
         cv2.imshow("gt", colored_class_image)
         cv2.imshow("diff_new_old", new_img - old_img)

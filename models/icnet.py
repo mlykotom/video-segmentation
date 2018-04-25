@@ -11,13 +11,14 @@ from keras.layers import ZeroPadding2D
 from keras.models import Model
 
 from base_model import BaseModel
-from layers import BilinearUpSampling2D
+from layers import BilinearUpSampling2D, ResizeBilinear
 
 
 class ICNet(BaseModel):
 
-    def branch_half(self, x, prefix=''):
-        y = Lambda(lambda x: tf.image.resize_bilinear(x, size=(int(x.shape[1]) // 2, int(x.shape[2]) // 2)), name=prefix + 'data_sub2')(x)
+    def branch_half(self, input_shape, prefix=''):
+        x = Input(input_shape)
+        y = ResizeBilinear(out_size=(int(x.shape[1]) // 2, int(x.shape[2]) // 2), name=prefix + 'data_sub2')(x)
         y = Conv2D(32, 3, strides=2, padding='same', activation='relu', name=prefix + 'conv1_1_3x3_s2')(y)
         y = BatchNormalization(name=prefix + 'conv1_1_3x3_s2_bn')(y)
         y = Conv2D(32, 3, padding='same', activation='relu', name=prefix + 'conv1_2_3x3')(y)
@@ -71,10 +72,11 @@ class ICNet(BaseModel):
         y = Add(name=prefix + 'conv3_1')([y, y_])
         z = Activation('relu', name=prefix + 'conv3_1/relu')(y)
 
-        return z
+        return Model(x, z, name='branch_1/2')
 
-    def branch_quarter(self, z, prefix=''):
-        y_ = Lambda(lambda x: tf.image.resize_bilinear(x, size=(int(x.shape[1]) // 2, int(x.shape[2]) // 2)), name=prefix + 'conv3_1_sub4')(z)
+    def branch_quarter(self, input_shape, prefix=''):
+        z = Input(input_shape)
+        y_ = ResizeBilinear(out_size=(int(z.shape[1]) // 2, int(z.shape[2]) // 2), name=prefix + 'conv3_1_sub4')(z)
         y = Conv2D(64, 1, activation='relu', name=prefix + 'conv3_2_1x1_reduce')(y_)
         y = BatchNormalization(name=prefix + 'conv3_2_1x1_reduce_bn')(y)
         y = ZeroPadding2D(name=prefix + 'padding5')(y)
@@ -198,27 +200,33 @@ class ICNet(BaseModel):
         y = BatchNormalization(name=prefix + 'conv5_3_1x1_increase_bn')(y)
         y = Add(name=prefix + 'conv5_3')([y, y_])
         y = Activation('relu', name=prefix + 'conv5_3/relu')(y)
-        return y
 
-    def pyramid_block(self, y, prefix=''):
-        h, w = y.shape[1:3].as_list()
-        pool1 = AveragePooling2D(pool_size=(h, w), strides=(h, w), name=prefix + 'conv5_3_pool1')(y)
-        pool1 = Lambda(lambda x: tf.image.resize_bilinear(x, size=(h, w)), name=prefix + 'conv5_3_pool1_interp')(pool1)
-        pool2 = AveragePooling2D(pool_size=(h / 2, w / 2), strides=(h // 2, w // 2), name=prefix + 'conv5_3_pool2')(y)
-        pool2 = Lambda(lambda x: tf.image.resize_bilinear(x, size=(h, w)), name=prefix + 'conv5_3_pool2_interp')(pool2)
-        pool3 = AveragePooling2D(pool_size=(h / 3, w / 3), strides=(h // 3, w // 3), name=prefix + 'conv5_3_pool3')(y)
-        pool3 = Lambda(lambda x: tf.image.resize_bilinear(x, size=(h, w)), name=prefix + 'conv5_3_pool3_interp')(pool3)
-        pool6 = AveragePooling2D(pool_size=(h / 4, w / 4), strides=(h // 4, w // 4), name=prefix + 'conv5_3_pool6')(y)
-        pool6 = Lambda(lambda x: tf.image.resize_bilinear(x, size=(h, w)), name=prefix + 'conv5_3_pool6_interp')(pool6)
+        return Model(z, y, name='branch_1/4')
 
-        y = Add(name=prefix + 'conv5_3_sum')([y, pool1, pool2, pool3, pool6])
+    def pyramid_block(self, input_shape, prefix=''):
+        input = Input(input_shape)
+        h, w = input.shape[1:3].as_list()
+        pool1 = AveragePooling2D(pool_size=(h, w), strides=(h, w), name=prefix + 'conv5_3_pool1')(input)
+        pool1 = ResizeBilinear(out_size=(h, w), name=prefix + 'conv5_3_pool1_interp')(pool1)
+
+        pool2 = AveragePooling2D(pool_size=(h / 2, w / 2), strides=(h // 2, w // 2), name=prefix + 'conv5_3_pool2')(input)
+        pool2 = ResizeBilinear(out_size=(h, w), name=prefix + 'conv5_3_pool2_interp')(pool2)
+
+        pool3 = AveragePooling2D(pool_size=(h / 3, w / 3), strides=(h // 3, w // 3), name=prefix + 'conv5_3_pool3')(input)
+        pool3 = ResizeBilinear(out_size=(h, w), name=prefix + 'conv5_3_pool3_interp')(pool3)
+
+        pool6 = AveragePooling2D(pool_size=(h / 4, w / 4), strides=(h // 4, w // 4), name=prefix + 'conv5_3_pool6')(input)
+        pool6 = ResizeBilinear(out_size=(h, w), name=prefix + 'conv5_3_pool6_interp')(pool6)
+
+        y = Add(name=prefix + 'conv5_3_sum')([input, pool1, pool2, pool3, pool6])
         y = Conv2D(256, 1, activation='relu', name=prefix + 'conv5_4_k1')(y)
         y = BatchNormalization(name=prefix + 'conv5_4_k1_bn')(y)
 
         aux_1 = BilinearUpSampling2D(name=prefix + 'conv5_4_interp')(y)
-        return aux_1
+        return Model(input, aux_1, name='pyramid_block')
 
-    def block_0(self, x, prefix=''):
+    def block_0(self, input_shape, prefix=''):
+        x = Input(input_shape)
         y = Conv2D(32, 3, strides=2, padding='same', activation='relu', name=prefix + 'conv1_sub1')(x)
         y = BatchNormalization(name=prefix + 'conv1_sub1_bn')(y)
         y = Conv2D(32, 3, strides=2, padding='same', activation='relu', name=prefix + 'conv2_sub1')(y)
@@ -227,7 +235,7 @@ class ICNet(BaseModel):
         y = BatchNormalization(name=prefix + 'conv3_sub1_bn')(y)
         y = Conv2D(128, 1, name=prefix + 'conv3_sub1_proj')(y)
         y = BatchNormalization(name=prefix + 'conv3_sub1_proj_bn')(y)
-        return y
+        return Model(x, y, name='branch_1')
 
     def out_block(self, inputs, y, aux_1, aux_2):
         if self.training_phase:
@@ -290,9 +298,9 @@ class ICNet(BaseModel):
 
         return {
             'out': [
-                metrics.precision,
-                metrics.recall,
-                metrics.f1_score,
+                # metrics.precision,
+                # metrics.recall,
+                # metrics.f1_score,
                 keras.metrics.categorical_accuracy,
                 metrics.mean_iou,
             ]
@@ -303,33 +311,6 @@ class ICNet(BaseModel):
             return [1.0, 0.4, 0.16]
         else:
             return None
-
-    def optimizer_params(self):
-        # return optimizers.Adam(lr=0.0001) # baseline_b6_lr0.0001
-        # return optimizers.Adam(decay=0.00006)
-        # return optimizers.Adam()
-        # return optimizers.Adam(lr=0.0001, decay=0.00001)
-        # return optimizers.Adam(lr=0.0001, decay=0.0008)
-        # return optimizers.Adam(lr=0.0001, decay=0.001)
-        # return optimizers.Adam(lr=0.00025, decay=0.0099)
-        # return optimizers.Adam(lr=0.0001, decay=0.003) # TODO: 2nd best
-        # return optimizers.Adam(lr=0.0002, decay=0.099)  # TODO this is the best
-
-        if self.debug_samples == 120:
-            return {'lr': 0.0002, 'decay': 0.0991}  # for 120 samples
-        elif self.debug_samples == 20:
-            # return {'lr': 0.000305, 'decay': 0.0991} # for 20 samples
-            return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
-        else:
-            # return {'lr': 0.0009, 'decay': 0.005}
-            # return {'lr': 0.001, 'decay': 0.005} # running on mlyko.can
-            # return {'lr': 0.001, 'decay': 0.01}  # running on mlyko.can
-            # return {'lr': 0.001, 'decay': 0.009}  # running on mlyko.can
-            # return {'lr': 0.0018, 'decay': 0.001}  # running on doom
-            # return {'lr': 0.001, 'decay': 0.009} # runs on doom
-            # return {'lr': 0.0017, 'decay': 0.001}  # running on mlyko.can
-            # return {'lr': 0.002, 'decay': 0.002}  # running on mlyko.can
-            return {'lr': 0.0021, 'decay': 0.003}  # running on mlyko.can
 
 
 if __name__ == '__main__':

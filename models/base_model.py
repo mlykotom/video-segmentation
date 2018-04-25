@@ -117,7 +117,7 @@ class BaseModel:
             # metrics.precision,
             # metrics.recall,
             # metrics.f1_score,
-            # keras.metrics.categorical_accuracy,
+            keras.metrics.categorical_accuracy,
             metrics.mean_iou
         ]
 
@@ -143,12 +143,15 @@ class BaseModel:
         elif self.debug_samples == 5:
             return {'lr': 0.0012, 'decay': 0.0099999}  # for 5 samples
         elif self.debug_samples == 120:
-            return {'lr': 0.0002, 'decay': 0.0991}  # for 120 samples
+            # return {'lr': 0.0007, 'decay': 0.5}
+            # return {'lr': 0.0002, 'decay': 0.0991}  # for 120 samples
+            return {'lr': 0.0001, 'decay': 0.05}
         elif self.debug_samples == 20:
             return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
         else:
             # return {'lr': 0.001, 'decay': 0.009}
             return {'lr': 0.0011, 'decay': 0.0099}
+            # return {'lr': 0.001, 'decay': 0.009}      # FOR MOBILE_UNET
 
     def _optimizer_params(self):
         if self.lr_params is not None:

@@ -1,25 +1,32 @@
 import keras
 import keras.backend as K
 import tensorflow as tf
-from keras import Input, Model
+from keras.initializers import RandomNormal
+from keras.models import Model
+from keras.layers import Input
 from keras.constraints import Constraint
 from keras.engine import Layer
-from keras.layers import Lambda, Conv2D, concatenate
+from keras.layers import Lambda, Conv2D, concatenate, Subtract
+import cv2
 
 
-class MinMaxConstraint(Constraint):
-    def __init__(self, min=0., max=1.):
-        self.min = min
-        self.max = max
+class ResizeBilinear(Lambda):
+    def __init__(self, out_size, **kwargs):
+        def resize(image):
+            return K.tf.image.resize_bilinear(image, out_size)
 
-    def __call__(self, w):
-        w = K.maximum(self.min, K.minimum(self.max, w))
-        # w *= K.cast(K.greater_equal(w, self.min), K.floatx())
-        # w *= K.cast(K.less_equal(w, self.max), K.floatx())
-        return w
+        super(ResizeBilinear, self).__init__(resize, **kwargs)
 
 
 class LinearCombination(Layer):
+    class MinMaxConstraint(Constraint):
+        def __init__(self, min=0., max=1.):
+            self.min = min
+            self.max = max
+
+        def __call__(self, w):
+            return K.maximum(self.min, K.minimum(self.max, w))
+
     def __init__(self, init_weights=[1., 1.], **kwargs):
         self.init_weights = init_weights
         super(LinearCombination, self).__init__(**kwargs)
@@ -30,14 +37,12 @@ class LinearCombination(Layer):
 
         channels = input_shape[0][-1]
 
-        # self.inp = K.constant(1.0)
-
         self.w1 = self.add_weight(
             name='w1',
             shape=(channels,),
             initializer=keras.initializers.Constant(self.init_weights[0]),
             trainable=True,
-            constraint=MinMaxConstraint()
+            constraint=LinearCombination.MinMaxConstraint()
         )
 
         self.w2 = self.add_weight(
@@ -45,7 +50,7 @@ class LinearCombination(Layer):
             shape=(channels,),
             initializer=keras.initializers.Constant(self.init_weights[1]),
             trainable=True,
-            constraint=MinMaxConstraint()
+            constraint=LinearCombination.MinMaxConstraint()
         )
 
         super(LinearCombination, self).build(input_shape)
@@ -54,28 +59,111 @@ class LinearCombination(Layer):
         return input_shape[0]
 
     def call(self, inputs, **kwargs):
-        # trim_w1 = K.tf.minimum(K.tf.maximum(0., self.w1), 1.)
-        # trim_w2 = K.tf.minimum(K.tf.maximum(0., self.w2), 1.)
-
         return K.tf.multiply(self.w1, inputs[0]) + K.tf.multiply(self.w2, inputs[1])
 
 
-# class FlowCNN(Model):
+class RGB2Gray(Lambda):
+    def __init__(self, **kwargs):
+        def convertor(input):
+            return tf.image.rgb_to_grayscale(input)
 
-import cv2
+        super(RGB2Gray, self).__init__(convertor, **kwargs)
 
-import numpy as np
+
+class MorphOpeningDiffBW(Lambda):
+    def __init__(self, **kwargs):
+        ellipse = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        self.kernel = tf.expand_dims(tf.convert_to_tensor(ellipse, dtype=tf.int32), axis=-1)
+
+        self.strides = [1, 1, 1, 1]
+        self.rates = [1, 1, 1, 1]
+        super(MorphOpeningDiffBW, self).__init__(self._morph_open, **kwargs)
+
+    def _morph_open(self, input_old_new):
+        gray_old = tf.image.rgb_to_grayscale(input_old_new[0])
+        gray_new = tf.image.rgb_to_grayscale(input_old_new[1])
+
+        diff_tf = tf.subtract(gray_old, gray_new)
+        diff_tf = tf.image.convert_image_dtype(diff_tf, dtype=tf.int32)
+
+        erode = tf.nn.erosion2d(diff_tf, self.kernel, self.strides, self.rates, padding='SAME')
+        dilate = tf.nn.dilation2d(erode, self.kernel, self.strides, self.rates, padding='SAME')
+        dilate = tf.cast(dilate, tf.float32) / 256.0
+
+        out = tf.clip_by_value(dilate, 0, 1)
+        return out
+
+
+def flow_cnn(img_old, img_new, flo):
+    diff = Warp(name='img_diff')([img_new, flo])
+    opened = MorphOpeningDiffBW()([img_new, img_old])
+
+    x = concatenate([flo, img_new, img_old, diff, opened])
+    x = Conv2D(16, (3, 3), activation='relu', padding='same', kernel_initializer=RandomNormal(stddev=0.1))(x)
+    x = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer=RandomNormal(stddev=0.1))(x)
+    x = Conv2D(2, (3, 3), activation='relu', padding='same', kernel_initializer=RandomNormal(stddev=0.1))(x)
+    x = concatenate([flo, x])
+    transformed_flow = Conv2D(2, (1, 1), padding='same', name='transformed_flow', kernel_initializer=RandomNormal(stddev=0.1))(x)
+
+    return transformed_flow
+
+
+# def FlowCNN(target_size, name=''):
+#     img_old = Input(target_size + (3,), name='img_old')
+#     img_new = Input(target_size + (3,), name='img_new')
+#     flo = Input(target_size + (2,), name='flo')
+#
+#     diff = Warp(name='img_diff')([img_new, flo])
+#     # diff = Subtract(name='img_diff')([img_new, img_old])
+#
+#     # opened = MorphOpeningDiffBW()([img_old, img_new])
+#
+#     x = concatenate([flo, img_new, img_old, diff, ])  # opened # TODO
+#     x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+#     x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+#     x = Conv2D(2, (3, 3), activation='relu', padding='same')(x)
+#     x = concatenate([flo, x])
+#     transformed_flow = Conv2D(2, (1, 1), padding='same', name='transformed_flow')(x)
+#
+#     return Model([img_old, img_new, flo], transformed_flow, name='FlowCNN' + name)
+
+
+def netwarp(input_shape):
+    layer_old = Input(input_shape)
+    layer_new = Input(input_shape)
+    transformed_flow = Input(input_shape[:-1] + (2,))
+
+    out_size = layer_new.get_shape().as_list()[1:3]
+    resized_flow = ResizeBilinear(out_size)(transformed_flow)
+
+    warped = Warp()([layer_old, resized_flow])
+    combined = LinearCombination()([layer_new, warped])
+    return Model([layer_old, layer_new, transformed_flow], combined, name='netwarp_' + str(K.get_uid('netwarp_')))
+
+
+def netwarp_module_new(inp_layer, img_old, img_new, flo):
+    out_size = inp_layer.get_shape().as_list()[1:3]
+
+    img_old = ResizeBilinear(out_size)(img_old)
+    img_new = ResizeBilinear(out_size)(img_new)
+    flo = ResizeBilinear(out_size)(flo)
+
+    opened = MorphOpeningDiffBW()([img_old, img_new])
+    diff = Subtract(name='img_diff')([img_old, img_new])
+
+    x = concatenate([img_old, img_new, flo, diff, opened])
+    x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
+    x = concatenate([flo, x])
+    transformed_flow = Conv2D(2, (3, 3), padding='same')(x)
+
+    warped = Warp()([inp_layer, transformed_flow])
+    return warped
+
+
 def netwarp_module(img_old, img_new, flo):
-    img_old_gray = Lambda(lambda inp: tf.image.rgb_to_grayscale(inp))(img_old)
-    img_new_gray = Lambda(lambda inp: tf.image.rgb_to_grayscale(inp))(img_new)
-
-    # diff = keras.layers.Subtract(name='data_diff')([img_old, img_new])
-    diff = keras.layers.Subtract(name='data_diff')([img_old_gray, img_new_gray])
-
-    # TODO erode dilate
-    # TODO learn the kernel
-    # kernel = tf.Constant(np.ones((5,5),np.uint8))
-    # tf.nn.erosion2d(tf.nn.dilation2d(diff, ),)
+    diff = keras.layers.Subtract(name='img_diff')([img_old, img_new])
 
     x = concatenate([img_old, img_new, flo, diff])
     x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
@@ -88,61 +176,21 @@ def netwarp_module(img_old, img_new, flo):
 
 
 class Warp(Lambda):
-    @staticmethod
-    def _warp(x):
+    def _warp(self, x):
         img = x[0]
         flow = x[1]
-        # flow = FlowFilter()(flow)
 
         out_size = img.get_shape().as_list()[1:3]
-        resized_flow = Lambda(lambda image: K.tf.image.resize_bilinear(image, out_size))(flow)
-        out = tf_warp(img, resized_flow, out_size)
+        if self.resize:
+            flow = ResizeBilinear(out_size)(flow)
+
+        out = tf_warp(img, flow, out_size)
         # out = BatchNormalization()(out)
         return out
 
-    def __init__(self, **kwargs):
+    def __init__(self, resize=False, **kwargs):
+        self.resize = resize
         super(Warp, self).__init__(self._warp, **kwargs)
-
-
-class FlowFilter(Layer):
-    def __init__(self, init_value=1.0, **kwargs):
-        self.init_value = init_value
-        super(FlowFilter, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.fil = self.add_weight(name='filter',
-                                   shape=(1,),
-                                   initializer=keras.initializers.Constant(self.init_value),
-                                   trainable=True)
-
-        super(FlowFilter, self).build(input_shape)
-
-    def call(self, inputs, **kwargs):
-        return K.tf.where(K.tf.greater(K.tf.abs(inputs), self.fil), inputs, inputs)
-
-
-# class FlowFilter(Layer):
-#     def __init__(self, init_value=1.0, **kwargs):
-#         self.init_value = init_value
-#         super(FlowFilter, self).__init__(**kwargs)
-#
-#     def build(self, input_shape):
-#         print(input_shape)
-#
-#         self.fil = self.add_weight(
-#             name='filter',
-#             # shape=(1,),
-#             shape=input_shape,
-#             initializer=keras.initializers.Constant(self.init_value),
-#             trainable=True,
-#             dtype='float32'
-#         )
-#
-#         super(FlowFilter, self).build(input_shape)
-#
-#     def call(self, inputs, **kwargs):
-#         return K.tf.multiply(inputs, self.fil, name='flow_masked')
-#         # return K.tf.where(K.tf.greater(K.tf.abs(inputs), self.fil), inputs, inputs)
 
 
 def tf_warp(img, flow, target_size):
@@ -237,3 +285,29 @@ def tf_warp(img, flow, target_size):
     # compute output
     out = tf.add_n([wa * Ia, wb * Ib, wc * Ic, wd * Id])
     return out
+
+
+from IPython.display import SVG
+from keras.utils.vis_utils import model_to_dot
+
+if __name__ == '__main__':
+    target_size = 256, 512
+    img_old = Input(target_size + (3,), name='img_old')
+    k_layer = Input(target_size + (3,), name='k_layer_prev')
+    img = Input(target_size + (3,), name='img_current')
+    flo = Input(target_size + (2,), name='flow')
+
+    # x = netwarp_module_new(k_layer, img_old, img, flo)
+    # model = Model([k_layer, img_old, img, flo], x, name='FlowCNN')
+
+    x = flow_cnn(img_old, img, flo)
+    model = Model([img_old, img, flo], x, name='FlowCNN')
+
+    svg = SVG(model_to_dot(model, rankdir='LR', show_shapes=True, show_layer_names=True).create(prog='dot', format='svg'))
+
+    with open('flow_cnn.svg', 'wb') as file:
+        file.write(svg.data)
+
+    # dot.write('flow_cnn', format='svg')
+
+    # keras.utils.plot_model(model, 'flow_cnn.png')

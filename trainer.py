@@ -5,7 +5,7 @@ np.random.seed(2018)
 import json
 
 import losswise
-from keras.callbacks import ModelCheckpoint, LambdaCallback
+from keras.callbacks import ModelCheckpoint, LambdaCallback, Callback
 from losswise.libs import LosswiseKerasCallback
 
 import config
@@ -18,7 +18,7 @@ from models import *
 class Trainer:
     train_callbacks = []
 
-    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10):
+    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10, optical_flow_type='dis'):
         is_debug = debug_samples > 0
 
         if is_debug:
@@ -35,26 +35,50 @@ class Trainer:
         print("-- Number of GPUs used %d" % self.n_gpu)
         print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
-        prev_skip = 1
+        prev_skip = 0
 
         # -------------  pick the right model with proper generator
+        # -------------------------------------------------------- SEGNET
         if model_name == 'segnet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = SegNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'segnet_warp':
             self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegNetWarpDiff123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'mobile_unet':
-            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-            model = MobileUNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            model = SegnetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp1':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp2':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp3':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp3(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        # -------------------------------------------------------- ICNET
         elif model_name == 'icnet':
             self.datagen = CityscapesGeneratorForICNet(dataset_path, debug_samples=debug_samples)
             model = ICNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug)
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'icnet_warp2':
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            model = ICNetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'icnet_warp0':
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            model = ICNetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'icnet_warp012':
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            model = ICNetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'icnet_warp12':
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            model = ICNetWarp12(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        # -------------------------------------------------------- MOBILE_UNET
+        elif model_name == 'mobile_unet':
+            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
+            model = MobileUNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         else:
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug)
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = MobileUNetWarp4(target_size, self.datagen.n_classes, debug_samples=debug_samples)
 
         # -------------  set multi gpu model
@@ -256,7 +280,62 @@ class Trainer:
             params=losswise_params,
             display_interval=2
         )
-        self.train_callbacks.append(losswise_callback)
+        # self.train_callbacks.append(losswise_callback)
+
+        # class LosswiseKerasImageCallback(Callback):
+        #     def __init__(self, session, train_generator):
+        #         self.session = session
+        #         self.train_generator = train_generator
+        #         super(LosswiseKerasImageCallback, self).__init__()
+        #
+        #     def get_activations(self, model, layer, X_batch):
+        #         get_activations = K.function([model.layers[0].input, K.learning_phase()], [model.layers[layer].output, ])
+        #         activations = get_activations([X_batch, 0])
+        #         return activations
+        #
+        #     def layer_to_visualize(self, img_to_visualize, layer, model):
+        #         inputs = [K.learning_phase()] + model.inputs
+        #         get_activations = K.function(inputs, [layer.output])
+        #
+        #         def convout1_f(X):
+        #             # The [0] is to disable the training phase flag
+        #             return _convout1_f([0] + [X])
+        #
+        #         convolutions = convout1_f(img_to_visualize)
+        #         convolutions = np.squeeze(convolutions)
+        #         convolutions = np.moveaxis(convolutions, 2, 0)
+        #         print ('Shape of conv:', convolutions.shape)
+        #
+        #         # filters = convolutions.shape[0]
+        #         # print("convs", filters)
+        #         # n = int(np.ceil(np.sqrt(filters)))
+        #         #    print("sqrted", n)
+        #         # Visualization of each filter of the layer
+        #         # fig = plt.figure(figsize=(32, 32))
+        #         # for i in range(filters):
+        #         #     ax = fig.add_subplot(n, n, i + 1)
+        #         #     ax.imshow(convolutions[i], cmap='rgb')
+        #
+        #     def on_train_begin(self, logs=None):
+        #         self.x = 0
+        #         self.image_sequence = self.session.image_sequence(x=self.x, name='Transformed flow')
+        #
+        #     def on_batch_end(self, batch, logs=None):
+        #         self.x += 1
+        #
+        #     def on_epoch_end(self, epoch, logs=None):
+        #         logs = logs or {}
+        #
+        #         self.model.predict(self.xy.x_train, batch_size=p.bath_size)
+        #
+        #         self.image_sequence.append()
+        #
+        # image_losswise = LosswiseKerasImageCallback(
+        #     losswise_callback.session.image_sequence,
+        #     train_generator
+        # )
+        #
+        # self.train_callbacks.append(image_losswise)
 
         self.prepare_callbacks(run_name, epochs)
 
