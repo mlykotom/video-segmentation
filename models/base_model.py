@@ -7,6 +7,16 @@ from keras import optimizers
 class BaseModel:
     __metaclass__ = ABCMeta
 
+    @staticmethod
+    def model_from_json(path, custom_objects=None):
+        if custom_objects is None:
+            custom_objects = {}
+
+        with open(path, 'r') as f:
+            json_string = f.read()
+
+        keras.models.model_from_json(json_string, custom_objects=custom_objects)
+
     def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
         """
         :param tuple target_size: (height, width)
@@ -100,6 +110,17 @@ class BaseModel:
             show_shapes=True
         )
 
+    def save_json(self, to_file=None):
+        if to_file is None:
+            to_file = 'model_%s_%dx%d.json' % (self.name, self.target_size[0], self.target_size[1])
+            print("Saving json to file " + to_file)
+
+        data = self._model.to_json()
+        print(data)
+
+        with open(to_file, 'w') as f:
+            f.write(data)
+
     def save_final(self, to_file, last_epoch):
         """
 
@@ -121,7 +142,8 @@ class BaseModel:
             metrics.mean_iou
         ]
 
-    def get_custom_objects(self):
+    @staticmethod
+    def get_custom_objects():
         """dictionary of custom objects (as per keras definition)"""
         import metrics
         return {
@@ -149,8 +171,9 @@ class BaseModel:
         elif self.debug_samples == 20:
             return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
         else:
+            return {'lr': 0.001, 'decay': 0.055}
             # return {'lr': 0.001, 'decay': 0.009}
-            return {'lr': 0.0011, 'decay': 0.0099}
+            # return {'lr': 0.0011, 'decay': 0.0099} # FOR SEGNET
             # return {'lr': 0.001, 'decay': 0.009}      # FOR MOBILE_UNET
 
     def _optimizer_params(self):

@@ -67,6 +67,9 @@ class Trainer:
         elif model_name == 'icnet_warp0':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'icnet_warp1':
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            model = ICNetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp012':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
@@ -78,8 +81,9 @@ class Trainer:
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = MobileUNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         else:
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = MobileUNetWarp4(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            raise Exception("Unknown model!")
+            # self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            # model = MobileUNetWarp4(target_size, self.datagen.n_classes, debug_samples=debug_samples)
 
         # -------------  set multi gpu model
         self.model = model
@@ -271,16 +275,19 @@ class Trainer:
 
         losswise_params.update(self.model.params())
 
-        run_name = run_name + 'b%d_lr=%f_dec=%f' % (self.batch_size,
-                                                    losswise_params['optimizer']['lr'],
-                                                    losswise_params['optimizer']['decay'])
+        run_name = run_name + 'e%s.b%d.lr=%f._dec=%f' % (
+            epochs,
+            self.batch_size,
+            losswise_params['optimizer']['lr'],
+            losswise_params['optimizer']['decay']
+        )
 
         losswise_callback = LosswiseKerasCallback(
             tag=self.model.name + '|' + run_name,
             params=losswise_params,
             display_interval=2
         )
-        # self.train_callbacks.append(losswise_callback)
+        self.train_callbacks.append(losswise_callback)
 
         # class LosswiseKerasImageCallback(Callback):
         #     def __init__(self, session, train_generator):

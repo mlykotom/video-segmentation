@@ -138,24 +138,44 @@ if __name__ == '__main__':
     # model_left.k.load_weights(config.weights_path() + 'city/rel/SegNet/normal_eq_hist.h5')
     # model_left.compile()
 
-    model_left = SegnetWarp2(config.target_size(), datagen.n_classes)
+    models = []
+
+    # model_left = SegnetWarp2(config.target_size(), datagen.n_classes, for_training=False)
+    # json = model_left.k.to_json()
+    # print(json)
+
+    model_left = BaseModel.model_from_json('models/model_SegnetWarp2_256x512.json', SegnetWarp2.get_custom_objects())
     model_left.k.load_weights(config.weights_path() + 'city/rel/SegnetWarp2/random_normal_prev0b5_lr=0.000900_dec=0.050000.h5', by_name=True)
     model_left.compile()
 
-    model_right = SegNet(config.target_size(), datagen.n_classes)
-    model_right.k.load_weights(config.weights_path() + 'city/rel/SegNet/b4_lr=0.000900_dec=0.050000_2.h5', by_name=True)
+    model_left_final = Model(
+        inputs=model_left.k.inputs,
+        outputs=[
+            model_left.k.get_layer('conv_block_3').get_output_at(1),
+            model_left.k.get_layer('conv2d_12').output
+        ]
+    )
+
+    models.append(model_left_final)
+
+    model_right = SegNet(config.target_size(), datagen.n_classes, for_training=False)
+    model_right.k.load_weights(config.weights_path() + 'city/rel/SegNet/b4_lr=0.000900_dec=0.050000.h5', by_name=True)
     model_right.compile()
 
-    print("-- models loaded %s|%s" % (model_left.name, model_right.name))
+    models.append(model_right)
+
+    # model_names = [m.name for m in models]
+    # print("-- models loaded %s|%s" % model_names)
 
     height = config.target_size()[0]
     width = config.target_size()[1] * 2
     out = prep_out_video(args.output, fps, height, width)
-    print("-- reading data")
+    print("-- reading file %s" % args.input)
     try:
         time_sum = 0
         i = 0
         last_frame = None
+        last_prediction = None
         while True:
             ret, frame = vid.read()
             if not ret:
@@ -164,16 +184,15 @@ if __name__ == '__main__':
                 break
 
             # skipping boring part of video
-            if i < 4000:
-                i += 1
-                continue
+            # if i < 4000:
+            #     i += 1
+            #     continue
 
             frame = cv2.resize(frame, config.target_size()[::-1])
             if last_frame is None:
                 last_frame = frame
 
             flow = datagen.calc_optical_flow(last_frame, frame)
-
             # TODO                 self.optical_flow.setUseSpatialPropagation(True)
 
             frame_norm = datagen.normalize(frame, config.target_size())
@@ -183,23 +202,39 @@ if __name__ == '__main__':
                 np.array([last_frame_norm]),
                 np.array([frame_norm]),
                 np.array([flow]),
+                np.zeros((1, 32, 64, 256)) if last_prediction is None else last_prediction,  # TODO generalize
             ]
 
+            start = datetime.datetime.now()
+            outputs = model_left_final.predict(input_flow, 1, 1)
+            last_prediction = outputs[0]
+            prediction = outputs[1]
+
+            end = datetime.datetime.now()
+            diff_left = end - start
+
+            colored_left = datagen.one_hot_to_bgr(prediction, config.target_size(), datagen.n_classes, datagen.labels)
+
             # np.array([frame_norm])
-            colored_left, diff_left = predict_frame(input_flow, model_left, datagen)
+            # colored_left, diff_left = predict_frame(input_flow, model_left, datagen)
             colored_right, diff_right = predict_frame(np.array([frame_norm]), model_right, datagen)
 
             img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # alpha_blended_both = (0.6 * colored_left + 0.4 * img).astype('uint8')
             alpha_blended_both = (0.6 * colored_left + 0.4 * img).astype('uint8'), \
                                  (0.6 * colored_right + 0.4 * img).astype('uint8')
+            # write_text(alpha_blended, model_name, diff_left, i, time_sum, gpu_name)
 
             both_blended = np.hstack(alpha_blended_both)
+            # both_blended = alpha_blended_both
 
             time_sum += diff_left.microseconds / 1000.0
             print(i, diff_left.microseconds / 1000.0, 'ms')
-            # write_text(alpha_blended, model_name, diff_left, i, time_sum, gpu_name)
+            print(i, diff_right.microseconds / 1000.0, 'ms')
 
-            out.write(both_blended)
+            # out.write(both_blended)
+            cv2.imshow("both_blended", both_blended)
+            cv2.waitKey(1)
             last_frame = frame
 
             i += 1

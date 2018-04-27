@@ -2,10 +2,21 @@ from keras.layers import Convolution2D, BatchNormalization, UpSampling2D, Activa
 
 from layers import *
 from segnet import SegNet
+from base_model import BaseModel
 
 
 class SegNetWarp(SegNet):
     warp_decoder = []
+
+    @staticmethod
+    def get_custom_objects():
+        custom_objects = BaseModel.get_custom_objects()
+        custom_objects.update({
+            'Warp': Warp,
+            'ResizeBilinear': ResizeBilinear,
+            'LinearCombination': LinearCombination
+        })
+        return custom_objects
 
     def _create_model(self):
         img_old = Input(self.input_shape, name='data_old')
@@ -15,10 +26,10 @@ class SegNetWarp(SegNet):
         transformed_flow = flow_cnn(img_old, img_new, flo)
 
         # encoder
-        block_0 = self.block_model(self.input_shape, 64, True, 1)
-        block_1 = self.block_model(block_0.output_shape[1:], 128, True, 2)
-        block_2 = self.block_model(block_1.output_shape[1:], 256, True, 3)
-        block_3 = self.block_model(block_2.output_shape[1:], 512, False, 4)
+        block_0 = self.block_model(self.input_shape, 64, 1, True)
+        block_1 = self.block_model(block_0.output_shape[1:], 128, 2, True)
+        block_2 = self.block_model(block_1.output_shape[1:], 256, 3, True)
+        block_3 = self.block_model(block_2.output_shape[1:], 512, 4, False)
 
         out = block_0(img_new)
         old_out = block_0(img_old)
@@ -99,6 +110,8 @@ class SegNetWarp(SegNet):
             if 2 in self.warp_decoder:
                 all_inputs.append(input_block_2)
 
+        print("all inputs", all_inputs)
+
         model = Model(inputs=all_inputs, outputs=[out])
         return model
 
@@ -114,10 +127,12 @@ class SegnetWarp1(SegNetWarp):
         self.warp_decoder.append(1)
         super(SegnetWarp1, self).__init__(target_size, n_classes, debug_samples, for_training)
 
+
 class SegnetWarp2(SegNetWarp):
     def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
         self.warp_decoder.append(2)
         super(SegnetWarp2, self).__init__(target_size, n_classes, debug_samples, for_training)
+
 
 class SegnetWarp3(SegNetWarp):
     def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
@@ -131,9 +146,11 @@ class SegnetWarp12(SegNetWarp):
         self.warp_decoder.append(2)
         super(SegnetWarp12, self).__init__(target_size, n_classes, debug_samples, for_training)
 
+
 if __name__ == '__main__':
-    target_size = (288, 480)
-    model = SegnetWarp12(target_size, 34, for_training=True)
+    target_size = 256, 512
+    model = SegnetWarp2(target_size, 34, for_training=False)
 
     print(model.summary())
     model.plot_model()
+    model.save_json()

@@ -15,6 +15,9 @@ from layers import BilinearUpSampling2D, ResizeBilinear
 
 
 class ICNet(BaseModel):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+        self.input_shape = target_size + (3,)
+        super(ICNet, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
 
     def branch_half(self, input_shape, prefix=''):
         x = Input(input_shape)
@@ -72,7 +75,7 @@ class ICNet(BaseModel):
         y = Add(name=prefix + 'conv3_1')([y, y_])
         z = Activation('relu', name=prefix + 'conv3_1/relu')(y)
 
-        return Model(x, z, name='branch_1/2')
+        return Model(x, z, name='branch_12')
 
     def branch_quarter(self, input_shape, prefix=''):
         z = Input(input_shape)
@@ -201,7 +204,7 @@ class ICNet(BaseModel):
         y = Add(name=prefix + 'conv5_3')([y, y_])
         y = Activation('relu', name=prefix + 'conv5_3/relu')(y)
 
-        return Model(z, y, name='branch_1/4')
+        return Model(z, y, name='branch_14')
 
     def pyramid_block(self, input_shape, prefix=''):
         input = Input(input_shape)
@@ -257,18 +260,22 @@ class ICNet(BaseModel):
         x = inp
 
         # (1/2)
-        z = self.branch_half(x)
+        branch_half = self.branch_half(self.input_shape)
+        z = branch_half(x)
 
         # (1/4)
-        y = self.branch_quarter(z)
+        branch_quarter = self.branch_quarter(branch_half.output_shape[1:])
+        y = branch_quarter(z)
 
-        aux_1 = self.pyramid_block(y)
+        pyramid_block = self.pyramid_block(branch_quarter.output_shape[1:])
+        aux_1 = pyramid_block(y)
 
         y = ZeroPadding2D(padding=2, name='padding17')(aux_1)
         y = Conv2D(128, 3, dilation_rate=2, name='conv_sub4')(y)
         y = BatchNormalization(name='conv_sub4_bn')(y)
         y_ = Conv2D(128, 1, name='conv3_1_sub2_proj')(z)
         y_ = BatchNormalization(name='conv3_1_sub2_proj_bn')(y_)
+
         y = Add(name='sub24_sum')([y, y_])
         y = Activation('relu', name='sub24_sum/relu')(y)
 
@@ -278,7 +285,8 @@ class ICNet(BaseModel):
         y_ = BatchNormalization(name='conv_sub2_bn')(y_)
 
         # (1)
-        y = self.block_0(x)
+        block_0 = self.block_0(self.input_shape)
+        y = block_0(x)
 
         y = Add(name='sub12_sum')([y, y_])
         y = Activation('relu', name='sub12_sum/relu')(y)
@@ -286,8 +294,9 @@ class ICNet(BaseModel):
 
         return self.out_block(inp, y, aux_1, aux_2)
 
-    def get_custom_objects(self):
-        parent_objects = super(ICNet, self).get_custom_objects()
+    @staticmethod
+    def get_custom_objects():
+        parent_objects = BaseModel.get_custom_objects()
         parent_objects.update({
             'BilinearUpSampling2D': BilinearUpSampling2D,
         })
@@ -320,6 +329,6 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNet(target_size, 32, for_training=False)
+    model = ICNet(target_size, 32, for_training=True)
     print(model.summary())
     model.plot_model()

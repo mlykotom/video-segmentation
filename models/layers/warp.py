@@ -128,17 +128,13 @@ def flow_cnn(img_old, img_new, flo):
 #     return Model([img_old, img_new, flo], transformed_flow, name='FlowCNN' + name)
 
 
-def netwarp(input_shape):
-    layer_old = Input(input_shape)
-    layer_new = Input(input_shape)
-    transformed_flow = Input(input_shape[:-1] + (2,))
-
+def netwarp(layer_old, layer_new, transformed_flow, name=None):
     out_size = layer_new.get_shape().as_list()[1:3]
     resized_flow = ResizeBilinear(out_size)(transformed_flow)
 
-    warped = Warp()([layer_old, resized_flow])
+    warped = Warp(name=name)([layer_old, resized_flow])
     combined = LinearCombination()([layer_new, warped])
-    return Model([layer_old, layer_new, transformed_flow], combined, name='netwarp_' + str(K.get_uid('netwarp_')))
+    return combined
 
 
 def netwarp_module_new(inp_layer, img_old, img_new, flo):

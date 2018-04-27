@@ -233,12 +233,20 @@ class BaseDataGenerator:
 
 class BaseFlowGenerator(BaseDataGenerator):
     __metaclass__ = ABCMeta
+    optical_flow = None
 
     def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1, optical_flow_type='dis'):
         if not hasattr(self, 'optical_flow_type'):
             self.optical_flow_type = optical_flow_type
 
         print("-- Optical flow type", self.optical_flow_type)
+
+        if self.optical_flow_type == 'dis':
+            print("-- creating optical flow DIS")
+            self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
+        elif self.optical_flow_type == 'deepflow':
+            print("-- creating optical flow DeepFlow")
+            self.optical_flow = cv2.optflow.createOptFlow_DeepFlow()
 
         super(BaseFlowGenerator, self).__init__(
             dataset_path,
@@ -254,13 +262,11 @@ class BaseFlowGenerator(BaseDataGenerator):
         new_gray = cv2.cvtColor(new, cv2.COLOR_RGB2GRAY)
 
         start = datetime.datetime.now()
-        # if self.optical_flow_type == 'dis':
-        #     if not hasattr(self, 'optical_flow') or self.optical_flow is None:
-        #         self.optical_flow = cv2.optflow.createOptFlow_DIS(cv2.optflow.DISOpticalFlow_PRESET_MEDIUM)
-        #
-        #     flow = self.optical_flow.calc(old_gray, new_gray, None)
-        # else:
-        flow = cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+
+        if self.optical_flow is not None:
+            flow = self.optical_flow.calc(old_gray, new_gray, None)
+        else:
+            flow = cv2.calcOpticalFlowFarneback(old_gray, new_gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
 
         end = datetime.datetime.now()
         diff = end - start
@@ -311,12 +317,14 @@ class BaseFlowGenerator(BaseDataGenerator):
         hsv[..., 0] = ang * 180 / np.pi / 2
         hsv[..., 1] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
         hsv[..., 2] = 255
-        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-        return bgr
+        return hsv
+        # bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        # return bgr
 
     @staticmethod
     def calcWarp(img_old, flow, size):
-        from models.layers import tf_warp
+        # from ..models.layers.warp import Warp
+        from .models.layers.warp import Warp
 
         with tf.Session() as sess:
             a = tf.placeholder(tf.float32, shape=[None, None, None, 3])
@@ -324,7 +332,7 @@ class BaseFlowGenerator(BaseDataGenerator):
 
             init = tf.global_variables_initializer()
             sess.run(init)
-            warp_graph = tf_warp(a, flow_vec, size)
+            warp_graph = Warp.tf_warp(a, flow_vec, size)
 
             out = sess.run(warp_graph, feed_dict={a: np.array([img_old]), flow_vec: np.array([flow])})
             out = np.clip(out, 0, 1)

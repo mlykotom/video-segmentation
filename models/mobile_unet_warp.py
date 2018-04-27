@@ -147,8 +147,9 @@ class MobileUNetWarp(MobileUNet):
 
         return Model(all_inputs, x)
 
-    def get_custom_objects(self):
-        custom_objects = super(MobileUNetWarp, self).get_custom_objects()
+    @staticmethod
+    def get_custom_objects():
+        custom_objects = MobileUNet.get_custom_objects()
         custom_objects.update({
             'Warp': Warp
         })

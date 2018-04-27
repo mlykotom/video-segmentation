@@ -1,6 +1,5 @@
-from keras.layers import Activation, BatchNormalization, Conv1D
+from keras.layers import Activation, BatchNormalization
 from keras.layers import Add
-from keras.layers import Input
 from keras.layers import ZeroPadding2D
 
 from icnet import ICNet
@@ -12,8 +11,6 @@ class ICNetWarp(ICNet):
     warp_decoder = []
 
     def _create_model(self):
-        self.input_shape = self.target_size + (3,)
-
         img_old = Input(shape=self.input_shape, name='data_old')
         img_new = Input(shape=self.input_shape, name='data_new')
         flo = Input(shape=self.target_size + (2,), name='data_flow')
@@ -36,7 +33,8 @@ class ICNetWarp(ICNet):
 
         if 2 in self.warp_decoder:
             y_old = branch_quarter(z_old)
-            y = netwarp(branch_quarter.output_shape[1:])([y_old, y, transformed_flow])
+            # y = netwarp(branch_quarter.output_shape[1:])([y_old, y, transformed_flow])
+            y = netwarp(y_old, y, transformed_flow)
 
         pyramid_block = self.pyramid_block(branch_quarter.output_shape[1:])
         aux_1 = pyramid_block(y)
@@ -48,13 +46,12 @@ class ICNetWarp(ICNet):
         conv3_1_sub2_proj = Conv2D(128, 1, name='conv3_1_sub2_proj')
         conv3_1_sub2_proj_bn = BatchNormalization(name='conv3_1_sub2_proj_bn')
 
-        y_ = conv3_1_sub2_proj(z)
-        y_ = conv3_1_sub2_proj_bn(y_)
+        y_ = conv3_1_sub2_proj_bn(conv3_1_sub2_proj(z))
 
         if 1 in self.warp_decoder:
-            y_old_ = conv3_1_sub2_proj(z_old)
-            y_old_ = conv3_1_sub2_proj_bn(y_old_)
-            y_ = netwarp(conv3_1_sub2_proj_bn.output_shape[1:])([y_old_, y_, transformed_flow])
+            y_old_ = conv3_1_sub2_proj_bn(conv3_1_sub2_proj(z_old))
+            # y_ = netwarp(conv3_1_sub2_proj_bn.output_shape[1:])([y_old_, y_, transformed_flow])
+            y_ = netwarp(y_old_, y_, transformed_flow)
 
         y = Add(name='sub24_sum')([y, y_])
         y = Activation('relu', name='sub24_sum/relu')(y)
@@ -70,7 +67,8 @@ class ICNetWarp(ICNet):
 
         if 0 in self.warp_decoder:
             y_old = block_0(x_old)
-            y = netwarp(block_0.output_shape[1:])([y_old, y, transformed_flow])
+            # y = netwarp(block_0.output_shape[1:])([y_old, y, transformed_flow])
+            y = netwarp(y_old, y, transformed_flow)
 
         y = Add(name='sub12_sum')([y, y_])
         y = Activation('relu', name='sub12_sum/relu')(y)
@@ -78,10 +76,13 @@ class ICNetWarp(ICNet):
 
         return self.out_block(all_inputs, y, aux_1, aux_2)
 
-    def get_custom_objects(self):
-        custom_objects = super(ICNetWarp, self).get_custom_objects()
+    @staticmethod
+    def get_custom_objects():
+        custom_objects = ICNet.get_custom_objects()
         custom_objects.update({
             'Warp': Warp,
+            'ResizeBilinear': ResizeBilinear,
+            'LinearCombination': LinearCombination
         })
         return custom_objects
 
@@ -133,6 +134,6 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNetWarp1(target_size, 32)
+    model = ICNetWarp2(target_size, 32)
     print(model.summary())
     model.plot_model()

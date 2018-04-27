@@ -1,12 +1,6 @@
-import keras
-from keras import Input
-from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Lambda, \
-    Add, SpatialDropout2D
-from keras.models import Model
-
+from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Add, SpatialDropout2D
+from layers import *
 from segnet_warp import SegNetWarp
-
-from layers import netwarp_module, Warp
 
 
 class SegNetWarpDiff123(SegNetWarp):

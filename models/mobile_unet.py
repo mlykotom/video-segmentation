@@ -221,8 +221,9 @@ class MobileUNet(BaseModel):
 
         return Model(input, x)
 
-    def get_custom_objects(self):
-        parent_objects = super(MobileUNet, self).get_custom_objects()
+    @staticmethod
+    def get_custom_objects():
+        parent_objects = BaseModel.get_custom_objects()
         parent_objects.update({
             'relu6': mobilenet.relu6,
             'DepthwiseConv2D': mobilenet.DepthwiseConv2D,

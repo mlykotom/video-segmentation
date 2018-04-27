@@ -1,7 +1,5 @@
-import keras
 from keras import Input
-from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, \
-    SpatialDropout2D
+from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, K
 from keras.models import Model
 
 from base_model import BaseModel
@@ -23,7 +21,9 @@ class SegNet(BaseModel):
             out = MaxPooling2D(pool_size=pool_size)(out)
         return out
 
-    def block_model(self, input_shape, filter_size, pool_at_end=True, block_id=None):
+    def block_model(self, input_shape, filter_size, block_id, pool_at_end=True):
+        # input_name = 'input_block_' + str(block_id)
+        # name = input_name + '_' + str(K.get_uid(input_name))
         input = Input(shape=input_shape)
         out = Convolution2D(filter_size, self._kernel_size, padding='same')(input)
         out = BatchNormalization()(out)
@@ -35,10 +35,10 @@ class SegNet(BaseModel):
     def _create_model(self):
         input = Input(shape=self.target_size + (3,), name='data_0')
 
-        block_0 = self.block_model(self.input_shape, 64, True, 1)
-        block_1 = self.block_model(block_0.output_shape[1:], 128, True, 2)
-        block_2 = self.block_model(block_1.output_shape[1:], 256, True, 3)
-        block_3 = self.block_model(block_2.output_shape[1:], 512, False, 4)
+        block_0 = self.block_model(self.input_shape, 64, 1, True)
+        block_1 = self.block_model(block_0.output_shape[1:], 128, 2, True)
+        block_2 = self.block_model(block_1.output_shape[1:], 256, 3, True)
+        block_3 = self.block_model(block_2.output_shape[1:], 512, 4, False)
 
         out = block_0(input)
         out = block_1(out)
