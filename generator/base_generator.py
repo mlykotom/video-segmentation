@@ -317,14 +317,13 @@ class BaseFlowGenerator(BaseDataGenerator):
         hsv[..., 0] = ang * 180 / np.pi / 2
         hsv[..., 1] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
         hsv[..., 2] = 255
-        return hsv
-        # bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-        # return bgr
+        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        return bgr
 
     @staticmethod
     def calcWarp(img_old, flow, size):
         # from ..models.layers.warp import Warp
-        from .models.layers.warp import Warp
+        from models.layers.warp import Warp
 
         with tf.Session() as sess:
             a = tf.placeholder(tf.float32, shape=[None, None, None, 3])

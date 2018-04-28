@@ -106,6 +106,6 @@ if __name__ == '__main__':
         cv2.imshow("new", datagen.denormalize(new_img))
         cv2.imshow("flo", flow_bgr)
         cv2.imshow("gt", colored_class_image)
-        cv2.imshow("diff_new_old", new_img - old_img)
-        cv2.imshow("diff_old_new", old_img - new_img)
+        # cv2.imshow("diff_new_old", new_img - old_img)
+        # cv2.imshow("diff_old_new", old_img - new_img)
         cv2.waitKey()
