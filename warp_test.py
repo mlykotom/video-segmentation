@@ -64,7 +64,7 @@ if __name__ == "__main__":
         sess.run(init)
         warp_graph = Warp.tf_warp(a, flow_arr, size[::-1])
 
-        out = sess.run(warp_graph, feed_dict={a: arrs[1], flow_vec: flow_arr})
+        out = sess.run(warp_graph, feed_dict={a: arrs[0], flow_vec: flow_arr})
         out = np.clip(out, 0, 1)
         winner = out[0]
 

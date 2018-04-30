@@ -5,12 +5,11 @@ np.random.seed(2018)
 import json
 
 import losswise
-from keras.callbacks import ModelCheckpoint, LambdaCallback, Callback
-from losswise.libs import LosswiseKerasCallback
+from keras.callbacks import ModelCheckpoint, LambdaCallback
 
 import config
 import utils
-from callbacks import SaveLastTrainedEpochCallback, CustomTensorBoard
+from callbacks import SaveLastTrainedEpochCallback, CustomTensorBoard, CustomLosswiseKerasCallback
 from generator import *
 from models import *
 
@@ -32,6 +31,7 @@ class Trainer:
         self.batch_size = batch_size * n_gpu
         self.target_size = target_size
         self._early_stopping = early_stopping
+        self._optical_flow_type = optical_flow_type
         print("-- Number of GPUs used %d" % self.n_gpu)
         print("-- Batch size (on all GPUs) %d" % self.batch_size)
 
@@ -84,6 +84,8 @@ class Trainer:
             raise Exception("Unknown model!")
             # self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             # model = MobileUNetWarp4(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+
+        print("-- Selected model", model.name)
 
         # -------------  set multi gpu model
         self.model = model
@@ -262,7 +264,7 @@ class Trainer:
         # ------------- losswise dashboard
 
         losswise_params = {
-            'samples': train_steps,
+            'steps_per_epoch': train_steps,
             'batch_size': self.batch_size,
             'model': self.model.name,
             'train_data': {
@@ -275,74 +277,19 @@ class Trainer:
 
         losswise_params.update(self.model.params())
 
-        run_name = run_name + 'e%s.b%d.lr=%f._dec=%f' % (
+        run_name = run_name + 'e%s.b%d.lr=%f._dec=%f.of=%s' % (
             epochs,
             self.batch_size,
             losswise_params['optimizer']['lr'],
-            losswise_params['optimizer']['decay']
+            losswise_params['optimizer']['decay'],
+            self._optical_flow_type
         )
 
-        losswise_callback = LosswiseKerasCallback(
+        losswise_callback = CustomLosswiseKerasCallback(
             tag=self.model.name + '|' + run_name,
-            params=losswise_params,
-            display_interval=2
+            params=losswise_params
         )
         self.train_callbacks.append(losswise_callback)
-
-        # class LosswiseKerasImageCallback(Callback):
-        #     def __init__(self, session, train_generator):
-        #         self.session = session
-        #         self.train_generator = train_generator
-        #         super(LosswiseKerasImageCallback, self).__init__()
-        #
-        #     def get_activations(self, model, layer, X_batch):
-        #         get_activations = K.function([model.layers[0].input, K.learning_phase()], [model.layers[layer].output, ])
-        #         activations = get_activations([X_batch, 0])
-        #         return activations
-        #
-        #     def layer_to_visualize(self, img_to_visualize, layer, model):
-        #         inputs = [K.learning_phase()] + model.inputs
-        #         get_activations = K.function(inputs, [layer.output])
-        #
-        #         def convout1_f(X):
-        #             # The [0] is to disable the training phase flag
-        #             return _convout1_f([0] + [X])
-        #
-        #         convolutions = convout1_f(img_to_visualize)
-        #         convolutions = np.squeeze(convolutions)
-        #         convolutions = np.moveaxis(convolutions, 2, 0)
-        #         print ('Shape of conv:', convolutions.shape)
-        #
-        #         # filters = convolutions.shape[0]
-        #         # print("convs", filters)
-        #         # n = int(np.ceil(np.sqrt(filters)))
-        #         #    print("sqrted", n)
-        #         # Visualization of each filter of the layer
-        #         # fig = plt.figure(figsize=(32, 32))
-        #         # for i in range(filters):
-        #         #     ax = fig.add_subplot(n, n, i + 1)
-        #         #     ax.imshow(convolutions[i], cmap='rgb')
-        #
-        #     def on_train_begin(self, logs=None):
-        #         self.x = 0
-        #         self.image_sequence = self.session.image_sequence(x=self.x, name='Transformed flow')
-        #
-        #     def on_batch_end(self, batch, logs=None):
-        #         self.x += 1
-        #
-        #     def on_epoch_end(self, epoch, logs=None):
-        #         logs = logs or {}
-        #
-        #         self.model.predict(self.xy.x_train, batch_size=p.bath_size)
-        #
-        #         self.image_sequence.append()
-        #
-        # image_losswise = LosswiseKerasImageCallback(
-        #     losswise_callback.session.image_sequence,
-        #     train_generator
-        # )
-        #
-        # self.train_callbacks.append(image_losswise)
 
         self.prepare_callbacks(run_name, epochs)
 

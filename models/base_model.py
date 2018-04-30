@@ -135,10 +135,6 @@ class BaseModel:
     def metrics(self):
         import metrics
         return [
-            # metrics.precision,
-            # metrics.recall,
-            # metrics.f1_score,
-            keras.metrics.categorical_accuracy,
             metrics.mean_iou
         ]
 
@@ -147,10 +143,6 @@ class BaseModel:
         """dictionary of custom objects (as per keras definition)"""
         import metrics
         return {
-            # 'dice_coef': metrics.dice_coef,
-            # 'precision': metrics.precision,
-            # 'recall': metrics.recall,
-            # 'f1_score': metrics.f1_score,
             'mean_iou': metrics.mean_iou
         }
 

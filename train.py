@@ -8,51 +8,72 @@ from trainer import Trainer
 if __name__ == '__main__':
     def parse_arguments():
         parser = argparse.ArgumentParser(description='Train model in keras')
-        parser.add_argument('-r', '--restart',
-                            action='store_true',
-                            help='Restarts training from last saved epoch',
-                            default=False)
+        parser.add_argument(
+            '-r', '--restart',
+            action='store_true',
+            help='Restarts training from last saved epoch',
+            default=False
+        )
 
-        parser.add_argument('-d', '--debug',
-                            help='Just debug training (number to pick from dataset)',
-                            default=0)
+        parser.add_argument(
+            '-d', '--debug',
+            help='Just debug training (number to pick from dataset)',
+            default=0
+        )
 
-        parser.add_argument('--summaries',
-                            action='store_true',
-                            help='If should plot model and summary',
-                            default=False)
+        parser.add_argument(
+            '--summaries',
+            action='store_true',
+            help='If should plot model and summary',
+            default=False)
 
-        parser.add_argument('-g', '--gpus',
-                            help='Number of GPUs used for training',
-                            default=1)
+        parser.add_argument(
+            '-g', '--gpus',
+            help='Number of GPUs used for training',
+            default=1
+        )
 
-        parser.add_argument('-m', '--model',
-                            help='Model to train [segnet, mobile_unet]',
-                            default='segnet')
+        parser.add_argument(
+            '-m', '--model',
+            help='Model to train [segnet, mobile_unet]',
+            default='segnet'
+        )
 
-        parser.add_argument('-b', '--batch',
-                            help='Batch size',
-                            default=2)
+        parser.add_argument(
+            '-b', '--batch',
+            help='Batch size',
+            default=2
+        )
 
-        parser.add_argument('-e', '--epochs',
-                            help='Number of epochs',
-                            default=200)
+        parser.add_argument(
+            '-e', '--epochs',
+            help='Number of epochs',
+            default=200
+        )
 
-        parser.add_argument('-s', '--stop',
-                            help='Early stopping',
-                            default=20)
+        parser.add_argument(
+            '-s', '--stop',
+            help='Early stopping',
+            default=20
+        )
 
-        parser.add_argument('--gid',
-                            help='GPU id',
-                            default=None)
+        parser.add_argument(
+            '--gid',
+            help='GPU id',
+            default=None
+        )
 
-        parser.add_argument('-lr',
-                            help='Learning rate',
-                            default=None)
+        parser.add_argument(
+            '-lr',
+            help='Learning rate',
+            default=None
+        )
 
-        parser.add_argument('--dec',
-                            help='Learning rate decay',
-                            default=None)
+        parser.add_argument(
+            '--dec',
+            help='Learning rate decay',
+            default=None
+        )
 
         parser.add_argument(
             '-n', '--name',
@@ -63,7 +84,19 @@ if __name__ == '__main__':
         parser.add_argument(
             '-o', '--optic',
             help='Optical flow',
-            default='dis'
+            default='farn'
+        )
+
+        parser.add_argument(
+            '--height',
+            help='Target image height',
+            default=config.target_size()[0]
+        )
+
+        parser.add_argument(
+            '--width',
+            help='Target image width',
+            default=config.target_size()[1]
         )
 
         args = parser.parse_args()
@@ -103,7 +136,7 @@ if __name__ == '__main__':
 
     try:
         epochs = int(args.epochs)
-        target_size = config.target_size()
+        target_size = int(args.height), int(args.width)
         batch_size = int(args.batch) or 2
         debug_samples = int(args.debug)
         early_stopping = int(args.stop)
@@ -114,6 +147,9 @@ if __name__ == '__main__':
         run_name = args.name
 
         optical_flow_type = args.optic
+
+        print("target size", target_size)
+        print("---------------")
 
         trainer = Trainer(args.model, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping, optical_flow_type=optical_flow_type)
         trainer.model.compile(

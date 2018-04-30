@@ -235,7 +235,7 @@ class BaseFlowGenerator(BaseDataGenerator):
     __metaclass__ = ABCMeta
     optical_flow = None
 
-    def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1, optical_flow_type='dis'):
+    def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1, optical_flow_type='farn'):
         if not hasattr(self, 'optical_flow_type'):
             self.optical_flow_type = optical_flow_type
 

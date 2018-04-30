@@ -307,10 +307,6 @@ class ICNet(BaseModel):
 
         return {
             'out': [
-                # metrics.precision,
-                # metrics.recall,
-                # metrics.f1_score,
-                keras.metrics.categorical_accuracy,
                 metrics.mean_iou,
             ]
         }
