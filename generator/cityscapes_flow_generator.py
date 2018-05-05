@@ -14,7 +14,7 @@ from cityscapes_generator import CityscapesGenerator
 
 
 class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
-    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flip_enabled=False, optical_flow_type='dis'):
+    def __init__(self, dataset_path, debug_samples=0, how_many_prev=1, prev_skip=0, flip_enabled=False, optical_flow_type='farn'):
         self.optical_flow_type = optical_flow_type
         super(CityscapesFlowGenerator, self).__init__(
             dataset_path=dataset_path,

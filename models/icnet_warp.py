@@ -88,46 +88,54 @@ class ICNetWarp(ICNet):
 
 
 class ICNetWarp0(ICNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(0)
-        super(ICNetWarp0, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
+        super(ICNetWarp0, self)._prepare()
 
 
 class ICNetWarp1(ICNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(1)
-        super(ICNetWarp1, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
+        super(ICNetWarp1, self)._prepare()
 
 
 class ICNetWarp2(ICNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(2)
-        super(ICNetWarp2, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
+        super(ICNetWarp2, self)._prepare()
 
 
 class ICNetWarp01(ICNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(0)
         self.warp_decoder.append(1)
-        super(ICNetWarp01, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
+        super(ICNetWarp01, self)._prepare()
 
 
 class ICNetWarp12(ICNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(1)
         self.warp_decoder.append(2)
-        super(ICNetWarp12, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
+        super(ICNetWarp12, self)._prepare()
 
 
 class ICNetWarp012(ICNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(0)
         self.warp_decoder.append(1)
         self.warp_decoder.append(2)
-        super(ICNetWarp012, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
+        super(ICNetWarp012, self)._prepare()
 
 
 if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    else:
+        __package__ = ''
+
     target_size = 256, 512
     import os
 
@@ -136,4 +144,8 @@ if __name__ == '__main__':
 
     model = ICNetWarp2(target_size, 32)
     print(model.summary())
-    model.plot_model()
+    # model.plot_model()
+
+    model.load_model('/home/mlyko/weights/city/rel/ICNetWarp2/1x1e150.b8.lr=0.001000._dec=0.051000.of=farn.h5')
+
+    # model.save_json()

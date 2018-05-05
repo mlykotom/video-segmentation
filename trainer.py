@@ -17,7 +17,7 @@ from models import *
 class Trainer:
     train_callbacks = []
 
-    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10, optical_flow_type='dis'):
+    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10, optical_flow_type='farn'):
         is_debug = debug_samples > 0
 
         if is_debug:
@@ -58,18 +58,15 @@ class Trainer:
         elif model_name == 'icnet':
             self.datagen = CityscapesGeneratorForICNet(dataset_path, debug_samples=debug_samples)
             model = ICNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp2':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp0':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp1':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'icnet_warp2':
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            model = ICNetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp012':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
@@ -238,6 +235,9 @@ class Trainer:
         # lr_base = 0.001  # self.model.optimizer().lr  # * (float(self.batch_size) / 16)
         # lr_power = 0.9
         # self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
+
+        # TODO try to have large LR and reduce it after 15 epochs to a lot smaller
+        # see: https://github.com/keras-team/keras/issues/898#issuecomment-285995644
 
     def fit_model(self, run_name, epochs, restart_training=False):
         # restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)

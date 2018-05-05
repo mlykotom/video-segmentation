@@ -1,9 +1,19 @@
-from keras.layers import Convolution2D, BatchNormalization, Activation, MaxPooling2D, UpSampling2D, Reshape, Add, SpatialDropout2D
+from keras.layers import Convolution2D, BatchNormalization, MaxPooling2D, UpSampling2D, Reshape, Add, SpatialDropout2D
+
 from layers import *
 from segnet_warp import SegNetWarp
+from mobile_unet_warp import netwarp_module
 
 
 class SegNetWarpDiff123(SegNetWarp):
+    def _block(self, input, filter_size, kernel_size, pool_size):
+        out = Convolution2D(filter_size, kernel_size, padding='same')(input)
+        out = BatchNormalization()(out)
+        out = Activation('relu')(out)
+        if pool_size is not None:
+            out = MaxPooling2D(pool_size=pool_size)(out)
+        return out
+
     def _create_model(self):
         img_old = Input(shape=self.target_size + (3,), name='data_old')
         img_new = Input(shape=self.target_size + (3,), name='data_new')

@@ -106,6 +106,14 @@ class BaseDataGenerator:
             yield x, y
 
     def load_data(self, type, batch_size, target_size):
+        """
+        Method for loading whole dataset into memory.
+        Won't work on large datasets such as Cityscapes because it would tak a lot of RAM to load.
+        :param type:
+        :param batch_size:
+        :param target_size:
+        :return:
+        """
         data = []
         labs = []
         from utils import print_progress
@@ -143,6 +151,11 @@ class BaseDataGenerator:
         return steps
 
     def _load_img(self, img_path):
+        """
+        Loads image from path or fails with error
+        :param img_path:
+        :return:
+        """
         img = cv2.imread(img_path)
         if img is None:
             raise ValueError("Image %s was not found!" % img_path)
@@ -247,6 +260,9 @@ class BaseFlowGenerator(BaseDataGenerator):
         elif self.optical_flow_type == 'deepflow':
             print("-- creating optical flow DeepFlow")
             self.optical_flow = cv2.optflow.createOptFlow_DeepFlow()
+        else:
+            print("-- using optical flow Farnenback (default openCV)")
+            pass
 
         super(BaseFlowGenerator, self).__init__(
             dataset_path,

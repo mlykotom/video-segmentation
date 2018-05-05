@@ -6,20 +6,13 @@ from base_model import BaseModel
 
 
 class SegNet(BaseModel):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+
+    def _prepare(self):
         self._filter_size = 64
         self._pool_size = (2, 2)
         self._kernel_size = (3, 3)
-        self.input_shape = target_size + (3,)
-        super(SegNet, self).__init__(target_size, n_classes, debug_samples, for_training)
-
-    def _block(self, input, filter_size, kernel_size, pool_size):
-        out = Convolution2D(filter_size, kernel_size, padding='same')(input)
-        out = BatchNormalization()(out)
-        out = Activation('relu')(out)
-        if pool_size is not None:
-            out = MaxPooling2D(pool_size=pool_size)(out)
-        return out
+        self.input_shape = self.target_size + (3,)
+        super(SegNet, self)._prepare()
 
     def block_model(self, input_shape, filter_size, block_id, pool_at_end=True):
         # input_name = 'input_block_' + str(block_id)
@@ -32,6 +25,18 @@ class SegNet(BaseModel):
             out = MaxPooling2D(pool_size=self._pool_size)(out)
         return Model(input, out, name='conv_block_%d' % block_id)
 
+    def decode_block(self, input_shape, filter_size, block_id, upsampling=True):
+        input = Input(shape=input_shape)
+
+        out = input
+        if upsampling:
+            out = UpSampling2D(size=self._pool_size)(out)
+
+        out = Convolution2D(256, self._kernel_size, padding='same')(out)
+        out = BatchNormalization()(out)
+
+        return Model(input, out, name='up_conv_block_%d' % block_id)
+
     def _create_model(self):
         input = Input(shape=self.target_size + (3,), name='data_0')
 
@@ -39,7 +44,6 @@ class SegNet(BaseModel):
         block_1 = self.block_model(block_0.output_shape[1:], 128, 2, True)
         block_2 = self.block_model(block_1.output_shape[1:], 256, 3, True)
         block_3 = self.block_model(block_2.output_shape[1:], 512, 4, False)
-
         out = block_0(input)
         out = block_1(out)
         out = block_2(out)
@@ -69,7 +73,9 @@ class SegNet(BaseModel):
 
 if __name__ == '__main__':
     target_size = 256, 512
-    model = SegNet(target_size, 32)
+    model = SegNet(target_size, 32, from_json='model_SegNet_256x512.json')
 
     print(model.summary())
-    model.plot_model()
+    # model.plot_model()
+
+    # model.save_json()

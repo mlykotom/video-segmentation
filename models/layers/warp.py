@@ -133,22 +133,8 @@ def netwarp(layer_old, layer_new, transformed_flow):
     resized_flow = ResizeBilinear(out_size)(transformed_flow)
 
     warped = Warp()([layer_old, resized_flow])
-    # combined = keras.layers.Add()([layer_new, warped])  # TODO changed !!
     combined = LinearCombination()([layer_new, warped])
     return combined
-
-
-def netwarp_module(img_old, img_new, flo):
-    diff = keras.layers.Subtract(name='img_diff')([img_old, img_new])
-
-    x = concatenate([img_old, img_new, flo, diff])
-    x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-    x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-    x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
-    x = concatenate([flo, x])
-    # x = BatchNormalization()(x)
-    x = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
-    return x
 
 
 class Warp(Layer):

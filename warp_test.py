@@ -46,7 +46,7 @@ if __name__ == "__main__":
         cv2.resize(cv2.imread(frames[1]), size)
     ]
 
-    flow = calc_optical_flow(imgs[0], imgs[1], 'dis')
+    flow = calc_optical_flow(imgs[0], imgs[1], 'farn')
     flow_arr = np.array([flow])
 
     print(imgs[0].dtype)

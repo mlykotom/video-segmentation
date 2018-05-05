@@ -1,9 +1,23 @@
+import keras
 from keras import Input
 from keras.layers import Conv2D, Activation, concatenate, Conv2DTranspose
 from keras.models import Model
 
-from layers import BilinearUpSampling2D, Warp, netwarp_module, LinearCombination
+from layers import BilinearUpSampling2D, Warp, LinearCombination
 from mobile_unet import MobileUNet
+
+
+def netwarp_module(img_old, img_new, flo):
+    diff = keras.layers.Subtract(name='img_diff')([img_old, img_new])
+
+    x = concatenate([img_old, img_new, flo, diff])
+    x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+    x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
+    x = concatenate([flo, x])
+    # x = BatchNormalization()(x)
+    x = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
+    return x
 
 
 class MobileUNetWarp(MobileUNet):

@@ -15,9 +15,9 @@ class BaseModel:
         with open(path, 'r') as f:
             json_string = f.read()
 
-        keras.models.model_from_json(json_string, custom_objects=custom_objects)
+        return keras.models.model_from_json(json_string, custom_objects=custom_objects)
 
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True, from_json=None):
         """
         :param tuple target_size: (height, width)
         :param int n_classes: number of classes
@@ -28,7 +28,15 @@ class BaseModel:
         self.debug_samples = debug_samples
         self.is_debug = debug_samples > 0
         self.training_phase = for_training
-        self._model = self._create_model()
+
+        self._prepare()
+        if from_json is not None:
+            self._model = self.model_from_json(from_json, self.get_custom_objects())
+        else:
+            self._model = self._create_model()
+
+    def _prepare(self):
+        pass
 
     def make_multi_gpu(self, n_gpu):
         from keras.utils import multi_gpu_model
@@ -45,7 +53,11 @@ class BaseModel:
         :return: self (for convenience)
         """
 
-        custom_objects = custom_objects.copy() or {}
+        if custom_objects is None:
+            custom_objects = {}
+        else:
+            custom_objects = custom_objects.copy()
+
         custom_objects.update(self.get_custom_objects())
 
         self._model.load_weights(

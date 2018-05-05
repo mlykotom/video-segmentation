@@ -1,11 +1,8 @@
-import keras
-import tensorflow as tf
 from keras.layers import Activation, BatchNormalization
 from keras.layers import Add
 from keras.layers import AveragePooling2D
 from keras.layers import Conv2D
 from keras.layers import Input
-from keras.layers import Lambda
 from keras.layers import MaxPooling2D
 from keras.layers import ZeroPadding2D
 from keras.models import Model
@@ -15,9 +12,9 @@ from layers import BilinearUpSampling2D, ResizeBilinear
 
 
 class ICNet(BaseModel):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
-        self.input_shape = target_size + (3,)
-        super(ICNet, self).__init__(target_size, n_classes, debug_samples=debug_samples, for_training=for_training)
+    def _prepare(self):
+        self.input_shape = self.target_size + (3,)
+        super(ICNet, self)._prepare()
 
     def branch_half(self, input_shape, prefix=''):
         x = Input(input_shape)

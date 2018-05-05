@@ -1,8 +1,8 @@
-from keras.layers import Convolution2D, BatchNormalization, UpSampling2D, Activation, MaxPooling2D
+from keras.layers import Convolution2D, BatchNormalization, UpSampling2D
 
+from base_model import BaseModel
 from layers import *
 from segnet import SegNet
-from base_model import BaseModel
 
 
 class SegNetWarp(SegNet):
@@ -110,47 +110,94 @@ class SegNetWarp(SegNet):
             if 2 in self.warp_decoder:
                 all_inputs.append(input_block_2)
 
-        print("all inputs", all_inputs)
-
         model = Model(inputs=all_inputs, outputs=[out])
         return model
 
 
 class SegnetWarp0(SegNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(0)
-        super(SegnetWarp0, self).__init__(target_size, n_classes, debug_samples, for_training)
+        super(SegnetWarp0, self)._prepare()
 
 
 class SegnetWarp1(SegNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(1)
-        super(SegnetWarp1, self).__init__(target_size, n_classes, debug_samples, for_training)
+        super(SegnetWarp1, self)._prepare()
 
 
 class SegnetWarp2(SegNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(2)
-        super(SegnetWarp2, self).__init__(target_size, n_classes, debug_samples, for_training)
+        super(SegnetWarp2, self)._prepare()
 
 
 class SegnetWarp3(SegNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(3)
-        super(SegnetWarp3, self).__init__(target_size, n_classes, debug_samples, for_training)
+        super(SegnetWarp3, self)._prepare()
+
+
+class SegnetWarp01(SegNetWarp):
+    def _prepare(self):
+        self.warp_decoder.append(0)
+        self.warp_decoder.append(1)  # TODO here was 2
+        super(SegnetWarp01, self)._prepare()
 
 
 class SegnetWarp12(SegNetWarp):
-    def __init__(self, target_size, n_classes, debug_samples=0, for_training=True):
+    def _prepare(self):
         self.warp_decoder.append(1)
         self.warp_decoder.append(2)
-        super(SegnetWarp12, self).__init__(target_size, n_classes, debug_samples, for_training)
+        super(SegnetWarp12, self)._prepare()
+
+
+class SegnetWarp23(SegNetWarp):
+    def _prepare(self):
+        self.warp_decoder.append(2)
+        self.warp_decoder.append(3)
+        super(SegnetWarp23, self)._prepare()
+
+
+class SegnetWarp012(SegNetWarp):
+    def _prepare(self):
+        self.warp_decoder.append(0)
+        self.warp_decoder.append(1)
+        self.warp_decoder.append(2)
+        super(SegnetWarp012, self)._prepare()
+
+
+class SegnetWarp0123(SegNetWarp):
+    def _prepare(self):
+        self.warp_decoder.append(0)
+        self.warp_decoder.append(1)
+        self.warp_decoder.append(2)
+        self.warp_decoder.append(3)
+        super(SegnetWarp0123, self)._prepare()
 
 
 if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    else:
+        __package__ = ''
+
+    import os
+
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
     target_size = 256, 512
     model = SegnetWarp2(target_size, 34, for_training=False)
-
     print(model.summary())
     model.plot_model()
-    model.save_json()
+    # model.save_json()
+
+    # model.load_model('/home/mlyko/weights/city/rel/SegnetWarp2/random_normal_prev0b5_lr=0.000900_dec=0.050000_150_finished.h5')
+
+    # blah = SegnetWarp2.model_from_json('model_SegnetWarp2_256x512.json')
+
+    # print(blah)
