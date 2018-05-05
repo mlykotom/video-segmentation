@@ -57,7 +57,6 @@ class BaseModel:
             custom_objects = {}
         else:
             custom_objects = custom_objects.copy()
-
         custom_objects.update(self.get_custom_objects())
 
         self._model.load_weights(
