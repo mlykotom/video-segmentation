@@ -136,17 +136,16 @@ if __name__ == '__main__':
     else:
         __package__ = ''
 
-
     target_size = 256, 512
     import os
 
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNetWarp12(target_size, 35, for_training=True)
+    model = ICNetWarp12(target_size, 35, for_training=False, from_json='model_ICNetWarp12_256x512.json')
     print(model.summary())
+    # model.save_json()
     # model.plot_model()
 
     model.k.load_weights('/home/mlyko/weights/city/rel/ICNetWarp12/0421:11e150.b8.lr=0.001000._dec=0.051000.of=farn.h5', by_name=True)
-
     print("succeeded")

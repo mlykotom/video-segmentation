@@ -1,25 +1,39 @@
+import cv2
 import keras
 import keras.backend as K
 import tensorflow as tf
-from keras.initializers import RandomNormal
-from keras.models import Model
-from keras.layers import Input, Activation
 from keras.constraints import Constraint
 from keras.engine import Layer
-from keras.layers import Lambda, Conv2D, concatenate, Subtract
-import cv2
+from keras.initializers import RandomNormal
+from keras.layers import Input
+from keras.layers import Lambda, Conv2D, concatenate
+from keras.models import Model
 
 
 def get_layer_name(prefix):
     return prefix + '_' + str(K.get_uid(prefix))
 
 
-class ResizeBilinear(Lambda):
-    def __init__(self, out_size, **kwargs):
-        def resize(image):
-            return K.tf.image.resize_bilinear(image, out_size)
+class ResizeBilinear(Layer):
+    def __init__(self, out_size=None, **kwargs):
+        self.out_size = out_size
+        super(ResizeBilinear, self).__init__(**kwargs)
 
-        super(ResizeBilinear, self).__init__(resize, **kwargs)
+    def call(self, inputs, **kwargs):
+        return K.tf.image.resize_bilinear(inputs, self.out_size)
+
+    def compute_output_shape(self, input_shape):
+        row = self.out_size[0]
+        col = self.out_size[1]
+        channels = input_shape[-1]
+
+        output_shape = (None, row, col, channels)
+        return output_shape
+
+    def get_config(self):
+        config = {'out_size': self.out_size}
+        base_config = super(ResizeBilinear, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
 
 
 class MinMaxConstraint(Constraint):
@@ -47,7 +61,7 @@ class LinearCombination(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
     def build(self, input_shape):
-        if input_shape[0] != input_shape[1]:
+        if input_shape[0] is not None and input_shape[1] is not None and input_shape[0] != input_shape[1]:
             raise Exception("Input shapes must be the same to LinearCombination layer")
 
         channels = input_shape[0][-1]
@@ -146,6 +160,9 @@ class Warp(Layer):
         config = {'resize': self.resize}
         base_config = super(Warp, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]
 
     def call(self, inputs, **kwargs):
         img = inputs[0]

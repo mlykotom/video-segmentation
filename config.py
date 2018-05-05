@@ -34,12 +34,9 @@ def data_path():
 
 
 def target_size():
-    # return 360, 648
-    # return 384, 640
-    # return 288, 480
     # return (1052, 1914) # original
-    return 256, 512
-    # return 512, 1024
+    # return 512, 1024 # /2
+    return 256, 512 # /4w
 
 
 
