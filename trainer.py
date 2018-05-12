@@ -220,7 +220,8 @@ class Trainer:
             (self.cpu_model if self.n_gpu > 1 else self.model.k),
             self.get_run_path(run_name, '../../logs'),
             self.batch_size,
-            histogram_freq=use_validation_data
+            histogram_freq=use_validation_data,
+            track_lr = self.n_gpu == 1
         )
 
         self.train_callbacks.append(tb)
@@ -258,12 +259,16 @@ class Trainer:
         # see: https://github.com/keras-team/keras/issues/898#issuecomment-285995644
 
     def fit_model(self, run_name, epochs, restart_training=False, workers=1, max_queue=20):
-        restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
+        if not self.is_debug:
+            restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
+        else:
+            restart_epoch = 0
+            restart_run_name = None
+            batch_size = None
+
         if restart_run_name is not None:
             run_name = restart_run_name
         batch_size = batch_size or self.batch_size
-        # restart_epoch = 0
-        # batch_size = self.batch_size
 
         if self.n_gpu > 1 and self.cpu_model is not None:
             # WARNING: multi gpu model not working on version keras 2.1.4, this is workaround
