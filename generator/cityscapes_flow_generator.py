@@ -1,15 +1,10 @@
-import os
-import random
-
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
-import cv2
 import itertools
 
+import cv2
 import numpy as np
+import random
 
-from base_generator import BaseFlowGenerator
+from base_generator import BaseFlowGenerator, threadsafe_generator
 from cityscapes_generator import CityscapesGenerator
 
 
@@ -24,6 +19,7 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
             flip_enabled=flip_enabled
         )
 
+    @threadsafe_generator
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
         i = 0
@@ -79,6 +75,10 @@ if __name__ == '__main__':
         __package__ = ''
 
     import config
+    import os
+
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     datagen = CityscapesFlowGenerator(config.data_path())
 

@@ -17,7 +17,7 @@ from models import *
 class Trainer:
     train_callbacks = []
 
-    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10, optical_flow_type='farn'):
+    def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10, optical_flow_type='farn', data_augmentation=True):
         is_debug = debug_samples > 0
 
         if is_debug:
@@ -42,7 +42,7 @@ class Trainer:
         if model_name == 'segnet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = SegNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp':
+        elif model_name == 'segnet_warp0':
             self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
             model = SegnetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'segnet_warp1':
@@ -54,6 +54,24 @@ class Trainer:
         elif model_name == 'segnet_warp3':
             self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
             model = SegnetWarp3(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp01':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp01(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp12':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp12(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp23':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp23(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp012':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp123':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'segnet_warp0123':
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
+            model = SegnetWarp0123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         # -------------------------------------------------------- ICNET
         elif model_name == 'icnet':
             self.datagen = CityscapesGeneratorForICNet(dataset_path, debug_samples=debug_samples)
@@ -134,7 +152,7 @@ class Trainer:
         return final_path + name_postfix
 
     def get_save_checkpoint_name(self, run_name):
-        return self.get_run_path(run_name, './checkpoint/', '_save_epoch.h5')
+        return self.get_run_path(run_name, '../../checkpoint/', '_save_epoch.h5')
 
     def get_last_epoch(self):
         """
@@ -153,7 +171,7 @@ class Trainer:
                 epoch = obj['epoch']
                 run_name = obj['run_name']
                 batch_size = obj['batch_size']
-                weights = self.get_save_checkpoint_name(run_name)
+                weights = obj['weights']
 
         except IOError:
             print("Couldn't load %s file" % filename)
@@ -175,11 +193,11 @@ class Trainer:
         """
 
         # add save epoch to json callback
-        save_epoch_callback = SaveLastTrainedEpochCallback(self.model, run_name, self.batch_size)
+        save_epoch_callback = SaveLastTrainedEpochCallback(self.model, run_name, self.batch_size, self.get_save_checkpoint_name(run_name))
         self.train_callbacks.append(save_epoch_callback)
 
         epoch_save = ModelCheckpoint(
-            self.get_save_checkpoint_name(run_name),
+            save_epoch_callback.weights_path,
             verbose=1,
         )
         self.train_callbacks.append(epoch_save)
@@ -239,13 +257,13 @@ class Trainer:
         # TODO try to have large LR and reduce it after 15 epochs to a lot smaller
         # see: https://github.com/keras-team/keras/issues/898#issuecomment-285995644
 
-    def fit_model(self, run_name, epochs, restart_training=False):
-        # restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
-        # if restart_run_name is not None:
-        #     run_name = restart_run_name
-        # batch_size = batch_size or self.batch_size
-        restart_epoch = 0
-        batch_size = self.batch_size
+    def fit_model(self, run_name, epochs, restart_training=False, workers=1, max_queue=20):
+        restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
+        if restart_run_name is not None:
+            run_name = restart_run_name
+        batch_size = batch_size or self.batch_size
+        # restart_epoch = 0
+        # batch_size = self.batch_size
 
         if self.n_gpu > 1 and self.cpu_model is not None:
             # WARNING: multi gpu model not working on version keras 2.1.4, this is workaround
@@ -277,7 +295,7 @@ class Trainer:
 
         losswise_params.update(self.model.params())
 
-        run_name = run_name + 'e%s.b%d.lr=%f._dec=%f.of=%s' % (
+        run_name = run_name + 'e%s.b%d.lr-%f._dec-%f.of-%s' % (
             epochs,
             self.batch_size,
             losswise_params['optimizer']['lr'],
@@ -302,9 +320,10 @@ class Trainer:
             validation_data=val_generator,
             validation_steps=val_steps,
             callbacks=self.train_callbacks,
-            max_queue_size=20,
-            use_multiprocessing=True,
-            shuffle=False
+            max_queue_size=max_queue,
+            shuffle=False,
+            use_multiprocessing=workers > 1,
+            workers=workers
         )
 
         # save final model

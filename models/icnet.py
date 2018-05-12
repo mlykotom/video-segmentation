@@ -293,11 +293,12 @@ class ICNet(BaseModel):
 
     @staticmethod
     def get_custom_objects():
-        parent_objects = BaseModel.get_custom_objects()
-        parent_objects.update({
+        custom_objects = BaseModel.get_custom_objects()
+        custom_objects.update({
             'BilinearUpSampling2D': BilinearUpSampling2D,
+            'ResizeBilinear': ResizeBilinear,
         })
-        return parent_objects
+        return custom_objects
 
     def metrics(self):
         import metrics
@@ -316,12 +317,22 @@ class ICNet(BaseModel):
 
 
 if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    else:
+        __package__ = ''
+
+
     target_size = 256, 512
     import os
 
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNet(target_size, 32, for_training=True)
+    model = ICNet(target_size, 35, for_training=False, from_json='model_ICNet_256x512.json')
     print(model.summary())
-    model.plot_model()
+    # model.plot_model()
+    # model.save_json()

@@ -155,11 +155,12 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
     On epoch end saves currently finished epoch to file
     """
 
-    def __init__(self, model, run_name, batch_size):
+    def __init__(self, model, run_name, batch_size, weights_path):
         self.model_name = model.name
         self.is_debug = model.is_debug
         self.run_name = run_name
         self.batch_size = batch_size
+        self.weights_path = weights_path
         super(SaveLastTrainedEpochCallback, self).__init__()
 
     @staticmethod
@@ -186,7 +187,8 @@ class SaveLastTrainedEpochCallback(callbacks.Callback):
             json.dump({
                 "epoch": epoch + 1,
                 "run_name": self.run_name,
-                "batch_size": self.batch_size
+                "batch_size": self.batch_size,
+                "weights": self.weights_path
             }, fp)
 
 # import matplotlib.pyplot as plt

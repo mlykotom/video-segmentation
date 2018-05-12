@@ -99,6 +99,24 @@ if __name__ == '__main__':
             default=config.target_size()[1]
         )
 
+        parser.add_argument(
+            '--aug',
+            help='Data Augmentation',
+            default=False
+        )
+
+        parser.add_argument(
+            '--workers',
+            help='Workers',
+            default=1
+        )
+
+        parser.add_argument(
+            '--queue',
+            help='Max queue',
+            default=50
+        )
+
         args = parser.parse_args()
         return args
 
@@ -122,6 +140,11 @@ if __name__ == '__main__':
     print("---------------")
     print("batch size", args.batch)
     print("run name", args.name)
+    print("---------------")
+    print("data augmentation", args.aug)
+    print("---------------")
+    print("workers", args.workers)
+    print("max_queue", args.queue)
     print("---------------")
 
     if args.gid is not None:
@@ -151,7 +174,9 @@ if __name__ == '__main__':
         print("target size", target_size)
         print("---------------")
 
-        trainer = Trainer(args.model, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping, optical_flow_type=optical_flow_type)
+        data_augmentation = bool(args.aug)
+
+        trainer = Trainer(args.model, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping, optical_flow_type=optical_flow_type, data_augmentation=data_augmentation)
         trainer.model.compile(
             lr=float(args.lr) if args.lr is not None else None,
             lr_decay=float(args.dec) if args.dec is not None else 0.
@@ -164,7 +189,9 @@ if __name__ == '__main__':
         trainer.fit_model(
             run_name=run_name,
             epochs=epochs,
-            restart_training=restart_training
+            restart_training=restart_training,
+            workers=int(args.workers),
+            max_queue=int(args.queue)
         )
     except KeyboardInterrupt:
         print("Keyboard interrupted")

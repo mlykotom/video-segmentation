@@ -1,12 +1,39 @@
 import datetime
 import itertools
-import random
 from abc import ABCMeta, abstractmethod, abstractproperty
 from math import ceil
 
 import cv2
+import random
 import tensorflow as tf
 from keras.preprocessing.image import *
+
+
+class threadsafe_iter:
+    """Takes an iterator/generator and makes it thread-safe by
+    serializing call to the `next` method of given iterator/generator.
+    """
+
+    def __init__(self, it):
+        self.it = it
+        self.lock = threading.Lock()
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        with self.lock:
+            return self.it.next()
+
+
+def threadsafe_generator(f):
+    """A decorator that takes a generator function and makes it thread-safe.
+    """
+
+    def g(*a, **kw):
+        return threadsafe_iter(f(*a, **kw))
+
+    return g
 
 
 class BaseDataGenerator:
@@ -18,7 +45,7 @@ class BaseDataGenerator:
 
     def __init__(self, dataset_path, debug_samples=0, flip_enabled=False, rotation=5.0, zoom=0.1, brightness=0.1):
         self._debug_samples = debug_samples
-        self.is_augment = debug_samples > 50
+        self.is_augment = debug_samples > 50 or debug_samples == 0
         self._data = {'train': [], 'val': [], 'test': []}
         self.dataset_path = dataset_path
         self.flip_enabled = flip_enabled
@@ -27,6 +54,7 @@ class BaseDataGenerator:
         self.brightness = brightness
 
         print("--- flip " + str(self.flip_enabled))
+        print("--- augmentation " + str(self.is_augment))
         print(dataset_path)
 
         self._fill_split('train')
@@ -70,6 +98,7 @@ class BaseDataGenerator:
         print("Cityscapes: shuffling dataset")
         random.shuffle(self._data[type])
 
+    @threadsafe_generator
     def flow(self, type, batch_size, target_size):
         """
         :param type: one of [train,val,test]
@@ -164,7 +193,7 @@ class BaseDataGenerator:
     def _prep_img(self, type, img_path, target_size, apply_flip=False):
         img = cv2.resize(self._load_img(img_path), target_size[::-1])
 
-        if not self.is_augment and type == 'train':
+        if self.is_augment and type == 'train':
             if self.brightness:
                 factor = 1.0 + abs(random.gauss(mu=0.0, sigma=self.brightness))
                 if random.randint(0, 1):
@@ -201,7 +230,7 @@ class BaseDataGenerator:
     def _prep_gt(self, type, label_path, target_size, apply_flip=False):
         seg_img = self._load_img(label_path)
 
-        if not self.is_augment and type == 'train':
+        if self.is_augment and type == 'train':
             if self.flip_enabled and apply_flip:
                 seg_img = cv2.flip(seg_img, 1)
 
@@ -295,6 +324,7 @@ class BaseFlowGenerator(BaseDataGenerator):
     def flow_just_img(self, type, batch_size, target_size):
         return super(BaseFlowGenerator, self).flow(type, batch_size, target_size)
 
+    @threadsafe_generator
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
 

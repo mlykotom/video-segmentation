@@ -1,21 +1,17 @@
-import os
+import itertools
 import random
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
 import cv2
-import itertools
-
 import numpy as np
 
-from base_generator import BaseFlowGenerator
+from base_generator import BaseFlowGenerator, threadsafe_generator
 from cityscapes_flow_generator import CityscapesFlowGenerator
 
 
 class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator):
     gt_sub = [4, 8, 16]
 
+    @threadsafe_generator
     def flow(self, type, batch_size, target_size):
         zipped = itertools.cycle(self._data[type])
         i = 0
@@ -73,8 +69,6 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
                 #         seg_tensor = self.one_hot_encoding(seg_img, subsampled_target_size)
                 #         out_arr[i].append(seg_tensor)
 
-            i += 1
-
             # x = [np.asarray(j) for j in in_arr]
             # y = [np.array(j) for j in out_arr]
 
@@ -86,6 +80,7 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
 
             y = [np.array(Y), np.array(Y2), np.array(Y3)]
             yield x, y
+            i += 1
 
 
 if __name__ == '__main__':
@@ -98,6 +93,10 @@ if __name__ == '__main__':
         __package__ = ''
 
     import config
+    import os
+
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     datagen = CityscapesFlowGeneratorForICNet(config.data_path())
 

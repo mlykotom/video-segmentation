@@ -123,10 +123,13 @@ class MorphOpeningDiffBW(Lambda):
         return out
 
 
-def flow_cnn(img_old, img_new, flo):
+def flow_cnn(input_shape):
+    img_old = Input(input_shape + (3,), name='img_old')
+    img_new = Input(input_shape + (3,), name='img_current')
+    flo = Input(input_shape + (2,), name='flow')
+
     diff = Warp(name='img_diff')([img_old, flo])
-    # opened = MorphOpeningDiffBW()([img_new, img_old])
-    x = concatenate([flo, img_new, diff])  # opened
+    x = concatenate([flo, img_new, diff])
     x = Conv2D(16, (3, 3), activation='relu', padding='same', kernel_initializer=RandomNormal(stddev=0.1))(x)
     x = Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer=RandomNormal(stddev=0.1))(x)
     x = Conv2D(2, (3, 3), padding='same', kernel_initializer=RandomNormal(stddev=0.1))(x)
@@ -139,7 +142,8 @@ def flow_cnn(img_old, img_new, flo):
         name='transformed_flow',
         kernel_initializer=RandomNormal(stddev=0.001),
     )(x)
-    return transformed_flow
+
+    return Model([img_old, img_new, flo], transformed_flow, name='FlowCNN')
 
 
 def netwarp(layer_old, layer_new, transformed_flow):
@@ -164,23 +168,26 @@ class Warp(Layer):
     def compute_output_shape(self, input_shape):
         return input_shape[0]
 
+    def build(self, input_shape):
+        self.out_size = input_shape[0][1:3]
+        super(Warp, self).build(input_shape)
+
     def call(self, inputs, **kwargs):
         img = inputs[0]
         flow = inputs[1]
 
-        out_size = img.get_shape().as_list()[1:3]
         if self.resize:
-            flow = ResizeBilinear(out_size)(flow)
+            flow = ResizeBilinear(self.out_size)(flow)
 
-        out = self.tf_warp(img, flow, out_size)
+        out = self.tf_warp(img, flow, self.out_size)
         return out
 
     @staticmethod
-    def tf_warp(img, flow, target_size):
+    def tf_warp(img, flow, size):
         # TODO read https://stackoverflow.com/questions/34902782/interpolated-sampling-of-points-in-an-image-with-tensorflow
         # TODO read https://github.com/tensorflow/models/blob/master/research/transformer/spatial_transformer.py
 
-        H, W = target_size
+        H, W = size
 
         def get_pixel_value(img, x, y):
             """

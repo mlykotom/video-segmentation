@@ -1,8 +1,8 @@
 import itertools
 import random
-import numpy as np
 
 import cv2
+import numpy as np
 
 from cityscapes_generator import CityscapesGenerator
 

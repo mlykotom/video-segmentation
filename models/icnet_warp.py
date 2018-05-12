@@ -17,7 +17,7 @@ class ICNetWarp(ICNet):
 
         all_inputs = [img_old, img_new, flo]
 
-        transformed_flow = flow_cnn(img_old, img_new, flo)
+        transformed_flow = flow_cnn(self.target_size)(all_inputs)
 
         x = img_new
         x_old = img_old
@@ -32,7 +32,11 @@ class ICNetWarp(ICNet):
         y = branch_quarter(z)
 
         if 2 in self.warp_decoder:
-            y_old = branch_quarter(z_old)
+            if self.training_phase:
+                y_old = branch_quarter(z_old)
+            else:
+                input_branch_quarter = Input(branch_quarter.output_shape[1:], name='prev_branch_14')
+                y_old = input_branch_quarter
             # y = netwarp(branch_quarter.output_shape[1:])([y_old, y, transformed_flow])
             y = netwarp(y_old, y, transformed_flow)
 
@@ -49,7 +53,12 @@ class ICNetWarp(ICNet):
         y_ = conv3_1_sub2_proj_bn(conv3_1_sub2_proj(z))
 
         if 1 in self.warp_decoder:
-            y_old_ = conv3_1_sub2_proj_bn(conv3_1_sub2_proj(z_old))
+            if self.training_phase:
+                y_old_ = conv3_1_sub2_proj_bn(conv3_1_sub2_proj(z_old))
+            else:
+                input_branch_half = Input(conv3_1_sub2_proj_bn.output_shape[1:], name='prev_conv3_1_sub2_proj_bn')
+                y_old_ = input_branch_half
+
             # y_ = netwarp(conv3_1_sub2_proj_bn.output_shape[1:])([y_old_, y_, transformed_flow])
             y_ = netwarp(y_old_, y_, transformed_flow)
 
@@ -66,13 +75,26 @@ class ICNetWarp(ICNet):
         y = block_0(x)
 
         if 0 in self.warp_decoder:
-            y_old = block_0(x_old)
+            if self.training_phase:
+                y_old = block_0(x_old)
+            else:
+                input_branch_full = Input(block_0.output_shape[1:], name='prev_branch_1')
+                y_old = input_branch_full
+
             # y = netwarp(block_0.output_shape[1:])([y_old, y, transformed_flow])
             y = netwarp(y_old, y, transformed_flow)
 
         y = Add(name='sub12_sum')([y, y_])
         y = Activation('relu', name='sub12_sum/relu')(y)
         y = BilinearUpSampling2D(name='sub12_sum_interp')(y)
+
+        if not self.training_phase:
+            if 0 in self.warp_decoder:
+                all_inputs.append(input_branch_full)
+            if 1 in self.warp_decoder:
+                all_inputs.append(input_branch_half)
+            if 2 in self.warp_decoder:
+                all_inputs.append(input_branch_quarter)
 
         return self.out_block(all_inputs, y, aux_1, aux_2)
 
@@ -81,7 +103,6 @@ class ICNetWarp(ICNet):
         custom_objects = ICNet.get_custom_objects()
         custom_objects.update({
             'Warp': Warp,
-            'ResizeBilinear': ResizeBilinear,
             'LinearCombination': LinearCombination
         })
         return custom_objects
@@ -142,10 +163,10 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNetWarp12(target_size, 35, for_training=False, from_json='model_ICNetWarp12_256x512.json')
+    model = ICNetWarp0(target_size, 35, for_training=False)
     print(model.summary())
-    # model.save_json()
-    # model.plot_model()
+    model.save_json()
+    model.plot_model()
 
-    model.k.load_weights('/home/mlyko/weights/city/rel/ICNetWarp12/0421:11e150.b8.lr=0.001000._dec=0.051000.of=farn.h5', by_name=True)
-    print("succeeded")
+    # model.k.load_weights('/home/mlyko/weights/city/rel/ICNetWarp12/0421:11e150.b8.lr=0.001000._dec=0.051000.of=farn.h5', by_name=True)
+    # print("succeeded")

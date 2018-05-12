@@ -111,7 +111,7 @@ class BaseModel:
         :param str to_file:
         """
         if to_file is None:
-            to_file = 'plot/model_%s_%dx%d.png' % (self.name, self.target_size[0], self.target_size[1])
+            to_file = 'plot/model_%s%s_%dx%d.png' % (self.name, "" if self.training_phase else "_TEST" , self.target_size[0], self.target_size[1])
             print("Plotting to file " + to_file)
 
         keras.utils.plot_model(
@@ -127,7 +127,6 @@ class BaseModel:
             print("Saving json to file " + to_file)
 
         data = self._model.to_json()
-        print(data)
 
         with open(to_file, 'w') as f:
             f.write(data)
