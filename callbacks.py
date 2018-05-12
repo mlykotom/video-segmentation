@@ -77,7 +77,7 @@ class CustomLosswiseKerasCallback(Callback):
                 if metric not in self.metric_list:
                     self.metric_list.append(metric)
         for metric in self.metric_list:
-            if 'acc' in metric or 'iou' in metric: # TODO changed - added iou
+            if 'acc' in metric or 'iou' in metric:  # TODO changed - added iou
                 kind = 'max'
             else:
                 kind = 'min'
@@ -102,8 +102,9 @@ class CustomLosswiseKerasCallback(Callback):
 
 
 class CustomTensorBoard(TensorBoard):
-    def __init__(self, proper_model, log_dir, batch_size, histogram_freq=0):
+    def __init__(self, proper_model, log_dir, batch_size, histogram_freq=0, track_lr=True):
         self._proper_model = proper_model
+        self._track_lr = track_lr
         if histogram_freq > 0:
             print("-- Using tensorboard with histograms")
 
@@ -127,25 +128,26 @@ class CustomTensorBoard(TensorBoard):
 
             logs.update({"mean_iou": out_mean_iou, "val_mean_iou": val_out_mean_iou})
 
-        # TODO not working on multi gpus :(
-        decay = self._proper_model.optimizer.decay
-        iterations = self._proper_model.optimizer.iterations
-        lr_with_decay = self._proper_model.optimizer.lr / (1. + decay * K.cast(iterations, K.dtype(decay)))
-        lr_value = K.eval(lr_with_decay)
-        print("--- LR:", lr_value)
-        logs.update({"learning_rate": np.array([lr_value])})
+        if self._track_lr:
+            # TODO not working on multi gpus :(
+            decay = self._proper_model.optimizer.decay
+            iterations = self._proper_model.optimizer.iterations
+            lr_with_decay = self._proper_model.optimizer.lr / (1. + decay * K.cast(iterations, K.dtype(decay)))
+            lr_value = K.eval(lr_with_decay)
+            print("--- LR:", lr_value)
+            logs.update({"learning_rate": np.array([lr_value])})
 
-        try:
-            lc_weights = self._proper_model.get_layer('linear_combination_1').get_weights()
-            lc = {
-                "lc_1_w1": np.average(lc_weights[0]),
-                "lc_1_w2": np.average(lc_weights[1])
-            }
-            logs.update(lc)
-            # print("--- LC", lc_weights[0], lc_weights[1])
-        except ValueError:
-            # THIS LAYER WAS NOT FOUND, just skip
-            pass
+            try:
+                lc_weights = self._proper_model.get_layer('linear_combination_1').get_weights()
+                lc = {
+                    "lc_1_w1": np.average(lc_weights[0]),
+                    "lc_1_w2": np.average(lc_weights[1])
+                }
+                logs.update(lc)
+                # print("--- LC", lc_weights[0], lc_weights[1])
+            except ValueError:
+                # THIS LAYER WAS NOT FOUND, just skip
+                pass
 
         super(CustomTensorBoard, self).on_epoch_end(epoch, logs)
 
