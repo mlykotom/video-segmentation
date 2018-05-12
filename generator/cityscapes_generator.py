@@ -5,12 +5,12 @@ import cv2
 
 import cityscapes_labels
 from base_generator import BaseDataGenerator
-
+import numpy as np
 
 class CityscapesGenerator(BaseDataGenerator):
     def __init__(self, dataset_path, debug_samples=0, how_many_prev=0, prev_skip=0, old_labels=False, flip_enabled=False):
         dataset_path = os.path.join(dataset_path, 'cityscapes/')
-        self._file_pattern = re.compile("(?P<city>[^_]*)_(?:[^_]+)_(?P<frame>[^_]+)_gtFine_color\.png")
+        self._file_pattern = re.compile("(?P<city>[^_]*)_(?:[^_]+)_(?P<frame>[^_]+)_gtFine_labelIds\.png")
         self._how_many_prev = how_many_prev
         self._prev_skip = prev_skip
         print("-- Cityscapes Previous skip", prev_skip)
@@ -21,6 +21,7 @@ class CityscapesGenerator(BaseDataGenerator):
         )
 
     _city_labels = [lab.color for lab in cityscapes_labels.labels]
+    _city_labels_struct = [lab for lab in cityscapes_labels.labels]
 
     _config = {
         'labels': _city_labels,
@@ -49,7 +50,7 @@ class CityscapesGenerator(BaseDataGenerator):
         filenames = []
         for root, dirs, files in os.walk(lab_path):
             for gt_name in files:
-                if gt_name.startswith('._') or not (gt_name.endswith('_color.png')):
+                if gt_name.startswith('._') or not (gt_name.endswith('_labelIds.png')):
                     continue
 
                 match = self._file_pattern.match(gt_name)
@@ -62,17 +63,17 @@ class CityscapesGenerator(BaseDataGenerator):
 
                 img_name = os.path.join(img_path, match_dict['city'], gt_name)
                 if self._how_many_prev == 0:
-                    i_batch = img_name.replace("gtFine_color", "leftImg8bit")
+                    i_batch = img_name.replace("gtFine_labelIds", "leftImg8bit")
                 else:
                     i_batch = []
                     for i in range(frame_i - self._how_many_prev - self._prev_skip, frame_i - self._prev_skip):
                         frame_str = str(i).zfill(6)
                         name_i = img_name \
                             .replace(match_dict['frame'], frame_str) \
-                            .replace("gtFine_color", "leftImg8bit")
+                            .replace("gtFine_labelIds", "leftImg8bit")
                         i_batch.append(name_i)
 
-                    i_batch.append(img_name.replace("gtFine_color", "leftImg8bit"))
+                    i_batch.append(img_name.replace("gtFine_labelIds", "leftImg8bit"))
 
                 filenames.append((i_batch, os.path.join(root, gt_name)))
 
@@ -81,6 +82,20 @@ class CityscapesGenerator(BaseDataGenerator):
 
         if not self._debug_samples:
             self.shuffle(which_set)
+
+    def one_hot_encoding(self, label_img, target_size):
+        label_img = cv2.cvtColor(label_img, cv2.COLOR_BGR2RGB)
+        label_img = cv2.resize(label_img, target_size[::-1], interpolation=cv2.INTER_NEAREST)
+
+        label_list = []
+        for lab in self._city_labels_struct:
+            label_current = np.all(label_img == lab.id, axis=2).astype(np.uint8)
+            label_list.append(label_current)
+
+        label_arr = np.array(label_list)
+        seg_labels = np.rollaxis(label_arr, 0, 3)
+
+        return seg_labels
 
     def normalize(self, rgb, target_size):
         norm = super(CityscapesGenerator, self).normalize(rgb, target_size)
@@ -105,20 +120,16 @@ if __name__ == '__main__':
 
     import config
 
-    datagen = CityscapesGenerator(config.data_path(), flip_enabled=True)
+    datagen = CityscapesGenerator(config.data_path(), flip_enabled=True, debug_samples=20)
 
     batch_size = 1
-    # target_size = 288, 480
     target_size = 256, 512
-    # target_size = 1024, 2048  # orig size
 
     for imgBatch, labelBatch in datagen.flow('train', batch_size, target_size):
-        print(len(imgBatch))
-
         img = imgBatch[0][0]
         label = labelBatch[0][0]
 
-        colored_class_image = datagen.one_hot_to_bgr(label, tuple(a // 4 for a in target_size), datagen.n_classes, datagen.labels)
+        colored_class_image = datagen.one_hot_to_bgr(label, target_size, datagen.n_classes, datagen.labels)
 
         cv2.imshow("normalized", img)
         cv2.imshow("gt", colored_class_image)
