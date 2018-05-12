@@ -4,9 +4,11 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from math import ceil
 
 import cv2
+import os
 import random
 import tensorflow as tf
 from keras.preprocessing.image import *
+import shutil
 
 
 class threadsafe_iter:
@@ -185,10 +187,27 @@ class BaseDataGenerator:
         :param img_path:
         :return:
         """
+
+        img_path = self.copy_to_scratch(img_path)
+
         img = cv2.imread(img_path)
         if img is None:
             raise ValueError("Image %s was not found!" % img_path)
         return img
+
+    def copy_to_scratch(self, img_path):
+        # os.environ['SCRATCH'] = '/Users/mlykotom/Downloads/scratch/'
+
+        if 'SCRATCH' in os.environ:
+            scratch_dir = os.environ['SCRATCH'] + '/'
+            file_name = os.path.split(img_path)[-1]
+            if not os.path.exists(scratch_dir + file_name):
+                print("-- copying %s to scratch" % file_name)
+                shutil.copy(img_path, scratch_dir)
+
+            img_path = scratch_dir + file_name
+
+        return img_path
 
     def _prep_img(self, type, img_path, target_size, apply_flip=False):
         img = cv2.resize(self._load_img(img_path), target_size[::-1])
@@ -252,7 +271,6 @@ class BaseDataGenerator:
 
         label_arr = np.array(label_list)
         seg_labels = np.rollaxis(label_arr, 0, 3)
-        # seg_labels = np.reshape(seg_labels, (label_img.shape[0] * label_img.shape[1], label_arr.shape[0]))
 
         return seg_labels
 
