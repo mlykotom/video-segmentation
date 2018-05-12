@@ -8,9 +8,9 @@ from generator.cityscapes_flow_generator import CityscapesFlowGenerator
 def flow_to_bgr(flow, old):
     mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
     hsv = np.zeros_like(old)
-    hsv[..., 1] = 255
     hsv[..., 0] = ang * 180 / np.pi / 2
-    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    hsv[..., 1] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    hsv[..., 2] = 255
     bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     return bgr
 
@@ -30,10 +30,10 @@ def calc_optical_flow(old, new, flow_type):
 
 if __name__ == "__main__":
     frames = [
-        '../optical_flow/frankfurt/frankfurt_000000_000293_leftImg8bit.png',
-        '../optical_flow/frankfurt/frankfurt_000000_000294_leftImg8bit.png',
-        # './sequence_files/frankfurt_000000_000293_leftImg8bit.png',
-        # './sequence_files/frankfurt_000000_000294_leftImg8bit.png',
+        # '../optical_flow/frankfurt/frankfurt_000000_000293_leftImg8bit.png',
+        # '../optical_flow/frankfurt/frankfurt_000000_000294_leftImg8bit.png',
+        '../optical_flow/frankfurt/frankfurt_000001_050684_leftImg8bit.png',
+        '../optical_flow/frankfurt/frankfurt_000001_050685_leftImg8bit.png',
     ]
 
     # datagen = CityscapesFlowGenerator()
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         cv2.resize(cv2.imread(frames[1]), size)
     ]
 
-    flow = calc_optical_flow(imgs[0], imgs[1], 'farn')
+    flow = calc_optical_flow(imgs[0], imgs[1], 'dis')
     flow_arr = np.array([flow])
 
     print(imgs[0].dtype)
@@ -71,5 +71,6 @@ if __name__ == "__main__":
         cv2.imshow("winner", winner)
         cv2.imshow("old", imgs[0])
         cv2.imshow("new", imgs[1])
+        cv2.imshow("diff", arrs[1][0] - arrs[0][0])
         cv2.imshow("flow", flow_to_bgr(flow, imgs[0]))
         cv2.waitKey()

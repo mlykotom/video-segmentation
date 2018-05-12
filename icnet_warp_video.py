@@ -117,65 +117,46 @@ if __name__ == '__main__':
         gpu_name = getGPUname()
 
     model_name = args.model
-
-    # if model_name == 'segnet':
-    #     raise NotImplementedError("Model not specified")
-    #     # datagen = CityscapesFlowGenerator(config.data_path())
-    #     # model = SegNetWarpDiff(config.target_size(), datagen.n_classes)
-    # else:
-    #     model_name = 'segnet_warp'
-    #     datagen = CityscapesFlowGenerator(config.data_path())
-    #     model = SegNetWarpDiff123(config.target_size(), datagen.n_classes)
-    #     # model.k.load_weights('../../weights/city/SegNetWarpDiff/warp_diff.h5')
-    #     # model.k.load_weights('/home/mlyko/weights/city/SegNetWarpDiff/diff_p0_w123_s04_aug.h5')
-    #     # model.k.load_weights('/home/mlyko/weights/city/rel/SegNetWarpDiff/diff_p0_w3_s04.h5')
-    #     model.k.load_weights(
-    #         '/home/mlyko/weights/city/rel/SegNetWarpDiff123/diff_p0_w123_s04_norm_eq_hist_dec_0001_g2.h5')
-    #     # model.k.load_weights('/home/mlyko/weights/city/SegNetWarpDiff/diff_p0_w123_s04_2.h5')
+    output_file = args.output
 
     datagen = CityscapesFlowGenerator(config.data_path())
-    # model_left = SegNet(config.target_size(), datagen.n_classes)
-    # model_left.k.load_weights(config.weights_path() + 'city/rel/SegNet/normal_eq_hist.h5')
-    # model_left.compile()
-
     models = []
 
-    # model_left = SegnetWarp2(config.target_size(), datagen.n_classes, for_training=False)
-    # json = model_left.k.to_json()
-    # print(json)
+    model_left = ICNetWarp2(config.target_size(), datagen.n_classes, for_training=False, from_json='models/model_ICNetWarp2_256x512.json')
+    model_left.k.load_weights(config.weights_path() + 'city/rel/ICNetWarp2/1x1e150.b8.lr=0.001000._dec=0.051000.of=farn.h5', by_name=True)
 
-    model_left = BaseModel.model_from_json('models/model_SegnetWarp2_256x512.json', SegnetWarp2.get_custom_objects())
-    model_left.k.load_weights(config.weights_path() + 'city/rel/SegnetWarp2/random_normal_prev0b5_lr=0.000900_dec=0.050000.h5', by_name=True)
+    # model_left = ICNetWarp12(config.target_size(), datagen.n_classes, for_training=False)
+    # model_left.k.load_weights(config.weights_path() + 'city/rel/ICNetWarp12/1x1.workers4.e150.b8.lr-0.001000._dec-0.051000.of-farn.h5', by_name=True)
+
     model_left.compile()
+
+    prev_input_layer = model_left.k.get_layer('branch_14')
 
     model_left_final = Model(
         inputs=model_left.k.inputs,
         outputs=[
-            model_left.k.get_layer('conv_block_3').get_output_at(1),
-            model_left.k.get_layer('conv2d_12').output
+            prev_input_layer.get_output_at(1),
+            model_left.k.get_layer('out_full').output
         ]
     )
 
     models.append(model_left_final)
 
-    model_right = SegNet(config.target_size(), datagen.n_classes, for_training=False)
-    model_right.k.load_weights(config.weights_path() + 'city/rel/SegNet/b4_lr=0.000900_dec=0.050000.h5', by_name=True)
-    model_right.compile()
-    #
-    # models.append(model_right)
-
-    # model_names = [m.name for m in models]
-    # print("-- models loaded %s|%s" % model_names)
+    if output_file is None:
+        output_file = model_left.name + '_' + args.input + '_drive.avi'
 
     height = config.target_size()[0]
-    width = config.target_size()[1] * 2
-    out = prep_out_video(args.output, fps, height, width)
+    width = config.target_size()[1]
+    out = prep_out_video(output_file, fps, height, width)
     print("-- reading file %s" % args.input)
+    print("-- output file %s" % output_file)
+
     try:
         time_sum = 0
         i = 0
         last_frame = None
         last_prediction = None
+        processed = 0
         while True:
             ret, frame = vid.read()
             if not ret:
@@ -202,7 +183,7 @@ if __name__ == '__main__':
                 np.array([last_frame_norm]),
                 np.array([frame_norm]),
                 np.array([flow]),
-                np.zeros((1, 32, 64, 256)) if last_prediction is None else last_prediction,  # TODO generalize
+                np.zeros((1, prev_input_layer.output_shape[1], prev_input_layer.output_shape[2], prev_input_layer.output_shape[3])) if last_prediction is None else last_prediction,  # TODO generalize
             ]
 
             start = datetime.datetime.now()
@@ -217,30 +198,33 @@ if __name__ == '__main__':
 
             # np.array([frame_norm])
             # colored_left, diff_left = predict_frame(input_flow, model_left, datagen)
-            colored_right, diff_right = predict_frame(np.array([frame_norm]), model_right, datagen)
+            # colored_right, diff_right = predict_frame(np.array([frame_norm]), model_right, datagen)
 
             img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # alpha_blended_both = (0.6 * colored_left + 0.4 * img).astype('uint8')
-            alpha_blended_both = (0.6 * colored_left + 0.4 * img).astype('uint8'), \
-                                 (0.6 * colored_right + 0.4 * img).astype('uint8')
-            # write_text(alpha_blended, model_name, diff_left, i, time_sum, gpu_name)
+            alpha_blended = (0.6 * colored_left + 0.4 * img).astype('uint8')
 
-            both_blended = np.hstack(alpha_blended_both)
-            # both_blended = alpha_blended_both
+            # write_text(alpha_blended, model_name, diff_left, i, time_sum, gpu_name)
 
             time_sum += diff_left.microseconds / 1000.0
             print(i, diff_left.microseconds / 1000.0, 'ms')
-            print(i, diff_right.microseconds / 1000.0, 'ms')
 
-            # out.write(both_blended)
-            cv2.imshow("both_blended", both_blended)
-            cv2.waitKey(1)
-            last_frame = frame
+            out.write(alpha_blended)
+            # TODO if you want to visualize it immediately
+            # cv2.imshow("alpha_blended", alpha_blended)
+            # if processed == 0:
+            #     cv2.waitKey()
+            # cv2.waitKey(1)
 
             i += 1
+            processed += 1
+            last_frame = frame
 
     except KeyboardInterrupt:
         # Release the Video Device
         vid.release()
         # Message to be displayed after releasing the device
         print("Released Video Resource")
+
+    print("-- checking result")
+    result = cv2.VideoCapture(output_file)
+    print(result.grab())

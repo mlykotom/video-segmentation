@@ -1,18 +1,8 @@
-import os
-
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
-import cv2
 import numpy as np
-import random
-from generator import cityscapes_labels
-import utils
-from generator import *
 
+from generator import *
+from generator import cityscapes_labels
 from models import *
-from keras import losses, metrics, optimizers
-from metrics import precision, dice_coef
 
 target_size = 256, 512
 
@@ -48,6 +38,9 @@ def get_layer_output(input, model, layer, index=None):
 
 
 if __name__ == '__main__':
+
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     labels = cityscapes_labels.labels
     n_classes = len(labels)
