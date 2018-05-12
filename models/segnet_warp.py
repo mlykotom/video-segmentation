@@ -23,7 +23,8 @@ class SegNetWarp(SegNet):
         img_new = Input(self.input_shape, name='data_new')
         flo = Input(shape=self.target_size + (2,), name='data_flow')
 
-        transformed_flow = flow_cnn(img_old, img_new, flo)
+        all_inputs = [img_old, img_new, flo]
+        transformed_flow = flow_cnn(self.target_size)(all_inputs)
 
         # encoder
         block_0 = self.block_model(self.input_shape, 64, 1, True)
@@ -49,7 +50,6 @@ class SegNetWarp(SegNet):
 
         if 1 in self.warp_decoder:
             if not self.training_phase:
-                # TODO
                 input_block_1 = Input(block_1.output_shape[1:], name='prev_conv_block_1')
                 old_branch = input_block_1
             else:
@@ -62,7 +62,6 @@ class SegNetWarp(SegNet):
 
         if 2 in self.warp_decoder:
             if not self.training_phase:
-                # TODO
                 input_block_2 = Input(block_2.output_shape[1:], name='prev_conv_block_2')
                 old_branch = input_block_2
             else:
@@ -75,7 +74,6 @@ class SegNetWarp(SegNet):
 
         if 3 in self.warp_decoder:
             if not self.training_phase:
-                # TODO
                 input_block_3 = Input(block_3.output_shape[1:], name='prev_conv_block_3')
                 old_branch = input_block_3
             else:
@@ -101,7 +99,6 @@ class SegNetWarp(SegNet):
 
         out = Convolution2D(self.n_classes, (1, 1), activation='softmax', padding='same')(out)
 
-        all_inputs = [img_old, img_new, flo]
         if not self.training_phase:
             if 0 in self.warp_decoder:
                 all_inputs.append(input_block_0)
@@ -109,6 +106,8 @@ class SegNetWarp(SegNet):
                 all_inputs.append(input_block_1)
             if 2 in self.warp_decoder:
                 all_inputs.append(input_block_2)
+            if 3 in self.warp_decoder:
+                all_inputs.append(input_block_3)
 
         model = Model(inputs=all_inputs, outputs=[out])
         return model
@@ -141,7 +140,7 @@ class SegnetWarp3(SegNetWarp):
 class SegnetWarp01(SegNetWarp):
     def _prepare(self):
         self.warp_decoder.append(0)
-        self.warp_decoder.append(1)  # TODO here was 2
+        self.warp_decoder.append(1)
         super(SegnetWarp01, self)._prepare()
 
 
@@ -166,6 +165,12 @@ class SegnetWarp012(SegNetWarp):
         self.warp_decoder.append(2)
         super(SegnetWarp012, self)._prepare()
 
+class SegnetWarp123(SegNetWarp):
+    def _prepare(self):
+        self.warp_decoder.append(1)
+        self.warp_decoder.append(2)
+        self.warp_decoder.append(3)
+        super(SegnetWarp123, self)._prepare()
 
 class SegnetWarp0123(SegNetWarp):
     def _prepare(self):
@@ -190,11 +195,13 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
+    print(os.getcwd())
+
     target_size = 256, 512
-    model = SegnetWarp2(target_size, 34, for_training=False)
+    model = SegnetWarp3(target_size, 35, for_training=False)
     print(model.summary())
     model.plot_model()
-    # model.save_json()
+    model.save_json()
 
     # model.load_model('/home/mlyko/weights/city/rel/SegnetWarp2/random_normal_prev0b5_lr=0.000900_dec=0.050000_150_finished.h5')
 
