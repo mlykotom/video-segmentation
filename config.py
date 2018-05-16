@@ -34,11 +34,24 @@ def data_path():
 
 
 def target_size():
-    # return (1052, 1914) # original
+    # return 1052, 1914 # original
     # return 512, 1024 # /2
-    return 256, 512 # /4w
-
+    return 256, 512  # /4w
 
 
 def weights_path():
-    return '/home/mlyko/weights/'
+    try:
+        weights_path = os.environ['WEIGHTS']
+    except:
+        home_user = os.environ['USER']
+        if home_user == 'mlyko':
+            try:
+                # metacentrum try
+                if os.environ['WHICH_SERVER'] == 'metacentrum':
+                    weights_path = '/storage/ostrava1/home/mlyko/weights/'
+            except:
+                weights_path = '/home/mlyko/weights/'
+        else:
+            raise Exception("Unknown data path!")
+
+    return weights_path
