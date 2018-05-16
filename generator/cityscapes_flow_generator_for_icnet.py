@@ -13,6 +13,9 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
 
     @threadsafe_generator
     def flow(self, type, batch_size, target_size):
+        if not self._files_loaded:
+            raise Exception('Files weren\'t loaded first!')
+
         zipped = itertools.cycle(self._data[type])
         i = 0
 
@@ -99,6 +102,7 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
     datagen = CityscapesFlowGeneratorForICNet(config.data_path())
+    datagen.load_files()
 
     batch_size = 3
     # target_size = 288, 480

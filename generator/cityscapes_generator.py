@@ -7,6 +7,7 @@ import cityscapes_labels
 from base_generator import BaseDataGenerator
 import numpy as np
 
+
 class CityscapesGenerator(BaseDataGenerator):
     def __init__(self, dataset_path, debug_samples=0, how_many_prev=0, prev_skip=0, old_labels=False, flip_enabled=False):
         dataset_path = os.path.join(dataset_path, 'cityscapes/')
@@ -121,6 +122,7 @@ if __name__ == '__main__':
     import config
 
     datagen = CityscapesGenerator(config.data_path(), flip_enabled=True, debug_samples=20)
+    datagen.load_files()
 
     batch_size = 1
     target_size = 256, 512

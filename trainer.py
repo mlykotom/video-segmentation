@@ -85,12 +85,15 @@ class Trainer:
         elif model_name == 'icnet_warp2':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp012':
+        elif model_name == 'icnet_warp01':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            model = ICNetWarp01(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         elif model_name == 'icnet_warp12':
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
             model = ICNetWarp12(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif model_name == 'icnet_warp012':
+            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+            model = ICNetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         # -------------------------------------------------------- MOBILE_UNET
         elif model_name == 'mobile_unet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
@@ -221,7 +224,7 @@ class Trainer:
             self.get_run_path(run_name, '../../logs'),
             self.batch_size,
             histogram_freq=use_validation_data,
-            track_lr = self.n_gpu == 1
+            track_lr=self.n_gpu == 1
         )
 
         self.train_callbacks.append(tb)
@@ -258,7 +261,7 @@ class Trainer:
         # TODO try to have large LR and reduce it after 15 epochs to a lot smaller
         # see: https://github.com/keras-team/keras/issues/898#issuecomment-285995644
 
-    def fit_model(self, run_name, epochs, restart_training=False, workers=1, max_queue=20):
+    def fit_model(self, run_name, epochs, restart_training=False, workers=1, max_queue=20, multiprocess=False):
         if not self.is_debug:
             restart_epoch, restart_run_name, batch_size = self.prepare_restarting(restart_training, run_name)
         else:
@@ -273,6 +276,8 @@ class Trainer:
         if self.n_gpu > 1 and self.cpu_model is not None:
             # WARNING: multi gpu model not working on version keras 2.1.4, this is workaround
             self.model.k.__setattr__('callback_model', self.cpu_model)
+
+        self.datagen.load_files()
 
         train_generator = self.datagen.flow('train', batch_size, self.target_size)
         train_steps = self.datagen.steps_per_epoch('train', batch_size)
@@ -308,11 +313,11 @@ class Trainer:
             self._optical_flow_type
         )
 
-        losswise_callback = CustomLosswiseKerasCallback(
-            tag=self.model.name + '|' + run_name,
-            params=losswise_params
-        )
-        self.train_callbacks.append(losswise_callback)
+        # losswise_callback = CustomLosswiseKerasCallback(
+        #     tag=self.model.name + '|' + run_name,
+        #     params=losswise_params
+        # )
+        # self.train_callbacks.append(losswise_callback)
 
         self.prepare_callbacks(run_name, epochs)
 
@@ -327,9 +332,10 @@ class Trainer:
             callbacks=self.train_callbacks,
             max_queue_size=max_queue,
             shuffle=False,
-            use_multiprocessing=workers > 1,
+            use_multiprocessing=multiprocess,
             workers=workers
         )
+
 
         # save final model
         self.model.save_final(self.get_run_path(run_name, '../../weights/'), epochs)

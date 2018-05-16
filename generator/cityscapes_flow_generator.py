@@ -21,6 +21,9 @@ class CityscapesFlowGenerator(CityscapesGenerator, BaseFlowGenerator):
 
     @threadsafe_generator
     def flow(self, type, batch_size, target_size):
+        if not self._files_loaded:
+            raise Exception('Files weren\'t loaded first!')
+
         zipped = itertools.cycle(self._data[type])
         i = 0
 

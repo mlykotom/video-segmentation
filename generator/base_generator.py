@@ -1,5 +1,6 @@
 import datetime
 import itertools
+import time
 from abc import ABCMeta, abstractmethod, abstractproperty
 from math import ceil
 
@@ -41,6 +42,8 @@ def threadsafe_generator(f):
 class BaseDataGenerator:
     __metaclass__ = ABCMeta
 
+    _files_loaded = False
+
     @abstractproperty
     def name(self):
         pass
@@ -59,18 +62,21 @@ class BaseDataGenerator:
         print("--- augmentation " + str(self.is_augment))
         print(dataset_path)
 
+    def load_files(self):
         self._fill_split('train')
         self._fill_split('val')
         self._fill_split('test')
 
         # sample for debugging
-        if debug_samples > 0:
-            self._data['train'] = self._data['train'][:debug_samples]
-            half_debug_samples = int(ceil(debug_samples * 0.5))
+        if self._debug_samples > 0:
+            self._data['train'] = self._data['train'][:self._debug_samples]
+            half_debug_samples = int(ceil(self._debug_samples * 0.5))
             self._data['val'] = self._data['val'][:half_debug_samples]
 
         print("training samples %d, validating samples %d, test samples %d" %
               (len(self._data['train']), len(self._data['val']), len(self._data['test'])))
+
+        self._files_loaded = True
 
     @abstractproperty
     def config(self):
@@ -108,6 +114,8 @@ class BaseDataGenerator:
         :param target_size:
         :return:
         """
+        if not self._files_loaded:
+            raise Exception('Files weren\'t loaded first!')
 
         zipped = itertools.cycle(self._data[type])
         i = 0
@@ -187,10 +195,24 @@ class BaseDataGenerator:
         :param img_path:
         :return:
         """
-
+        old_path = img_path
         img_path = self.copy_to_scratch(img_path)
-
+        # try scratch dir (if is found)
         img = cv2.imread(img_path)
+
+        if img is None:
+            print("--- %s not found, trying again in a while" % img_path)
+            time.sleep(2)
+            img = cv2.imread(img_path)
+            print("--second attempt (%s) %s" % (img_path, str(img is None)))
+
+        # try old path
+        if img is None:
+            print("--- reading old path %s" % old_path)
+            img = cv2.imread(old_path)
+            print("--third attempt (%s) q%s" % (img_path, str(img is None)))
+
+        # raise if file not found
         if img is None:
             raise ValueError("Image %s was not found!" % img_path)
         return img
@@ -202,10 +224,10 @@ class BaseDataGenerator:
             scratch_dir = os.environ['SCRATCH'] + '/'
             file_name = os.path.split(img_path)[-1]
             if not os.path.exists(scratch_dir + file_name):
-                print("-- copying %s to scratch" % file_name)
-                shutil.copy(img_path, scratch_dir)
-
-            img_path = scratch_dir + file_name
+                print("-- copying %s to %s" % (os.environ['SCRATCH'] + '/', file_name))
+                shutil.copyfile(img_path, scratch_dir + file_name)
+            else:
+                img_path = scratch_dir + file_name
 
         return img_path
 
@@ -252,7 +274,6 @@ class BaseDataGenerator:
         if self.is_augment and type == 'train':
             if self.flip_enabled and apply_flip:
                 seg_img = cv2.flip(seg_img, 1)
-
         # if self.rotation or self.zoom:
         #     M = cv2.getRotationMatrix2D((seg_img.shape[1] // 2, seg_img.shape[0] // 2), angle, scale)
         #     seg_img = cv2.warpAffine(seg_img, M, (seg_img.shape[1], seg_img.shape[0]))
@@ -344,6 +365,9 @@ class BaseFlowGenerator(BaseDataGenerator):
 
     @threadsafe_generator
     def flow(self, type, batch_size, target_size):
+        if not self._files_loaded:
+            raise Exception('Files weren\'t loaded first!')
+
         zipped = itertools.cycle(self._data[type])
 
         while True:

@@ -10,6 +10,7 @@ from cityscapes_generator import CityscapesGenerator
 class CityscapesGeneratorForICNet(CityscapesGenerator):
     gt_sub = [4, 8, 16]
 
+    @threadsafe_generator
     def flow(self, type, batch_size, target_size):
         """
         :param type: one of [train,val,test]
@@ -17,6 +18,8 @@ class CityscapesGeneratorForICNet(CityscapesGenerator):
         :param target_size:
         :return:
         """
+        if not self._files_loaded:
+            raise Exception('Files weren\'t loaded first!')
 
         zipped = itertools.cycle(self._data[type])
         i = 0
