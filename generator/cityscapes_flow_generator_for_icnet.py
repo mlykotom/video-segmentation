@@ -1,4 +1,5 @@
 import itertools
+import os
 import random
 
 import cv2
@@ -6,6 +7,8 @@ import numpy as np
 
 from base_generator import BaseFlowGenerator, threadsafe_generator
 from cityscapes_flow_generator import CityscapesFlowGenerator
+
+optflow_module = not ('WHICH_SERVER' in os.environ) or os.environ['WHICH_SERVER'] != 'metacentrum'
 
 
 class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator):
@@ -39,7 +42,18 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
                 img_new = self._prep_img(type, img_new_path, target_size, apply_flip)
 
                 # reverse flow
-                flow = self.calc_optical_flow(img_new, img_old)
+                if optflow_module:
+                    # write optical flow to folder and read it from there
+                    flo_file = self.dataset_path + 'flow/' + os.path.split(img_old_path)[-1] + '.flo'
+                    if os.path.exists(flo_file):
+                        # print("-- reading opt flow from path %s" % flo_file)
+                        flow = cv2.optflow.readOpticalFlow(flo_file)
+                    else:
+                        flow = self.calc_optical_flow(img_new, img_old)
+                        cv2.optflow.writeOpticalFlow(flo_file, flow)
+                        print('writing optflow to %s' % flo_file)
+                else:
+                    flow = self.calc_optical_flow(img_new, img_old)
 
                 flow_arr.append(flow)
                 in_arr[2].append(flow)

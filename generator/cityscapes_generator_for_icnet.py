@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 
 from cityscapes_generator import CityscapesGenerator
+from base_generator import threadsafe_generator
 
 
 class CityscapesGeneratorForICNet(CityscapesGenerator):
