@@ -1,6 +1,6 @@
 from keras import backend as K
 
-smooth = 1e-5  # TODO is also in loss.py
+smooth = 1e-5
 
 
 def precision(y_true, y_pred):

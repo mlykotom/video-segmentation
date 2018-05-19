@@ -66,9 +66,7 @@ if __name__ == '__main__':
     datagen = GTAGenerator(dataset_path=config.data_path())
 
     batch_size = 1
-    target_size = (360, 648)
-    # target_size = (1052, 1914)
-    # target_size = (10, 10)
+    target_size = 256, 512
 
     i = 3
     for img, label in datagen.flow('val', batch_size, target_size):

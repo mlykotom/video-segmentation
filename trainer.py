@@ -4,14 +4,16 @@ np.random.seed(2018)
 
 import json
 
-import losswise
 from keras.callbacks import ModelCheckpoint, LambdaCallback
 
 import config
 import utils
-from callbacks import SaveLastTrainedEpochCallback, CustomTensorBoard, CustomLosswiseKerasCallback
+from callbacks import SaveLastTrainedEpochCallback, CustomTensorBoard
 from generator import *
 from models import *
+import importlib
+
+import re
 
 
 class Trainer:
@@ -19,11 +21,6 @@ class Trainer:
 
     def __init__(self, model_name, dataset_path, target_size, batch_size, n_gpu, debug_samples=0, early_stopping=10, optical_flow_type='farn', data_augmentation=True):
         is_debug = debug_samples > 0
-
-        if is_debug:
-            losswise.set_api_key('EY32N390I')  # api_key for 'mlykotom/dp_debug'
-        else:
-            losswise.set_api_key('VY1G5AGSO')  # api_key for 'mlykotom/dp_release'
 
         self.debug_samples = debug_samples
         self.is_debug = is_debug
@@ -42,66 +39,51 @@ class Trainer:
         if model_name == 'segnet':
             self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
             model = SegNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp0':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp1':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp2':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp3':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp3(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp01':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp01(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp12':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp12(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp23':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp23(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp012':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp123':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'segnet_warp0123':
-            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples)
-            model = SegnetWarp0123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+        elif 'segnet_warp' in model_name:
+            self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
+
+            if model_name == 'segnet_warp0':
+                model = SegnetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp1':
+                model = SegnetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp2':
+                model = SegnetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp3':
+                model = SegnetWarp3(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp01':
+                model = SegnetWarp01(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp12':
+                model = SegnetWarp12(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp23':
+                model = SegnetWarp23(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp012':
+                model = SegnetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp123':
+                model = SegnetWarp123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'segnet_warp0123':
+                model = SegnetWarp0123(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         # -------------------------------------------------------- ICNET
         elif model_name == 'icnet':
             self.datagen = CityscapesGeneratorForICNet(dataset_path, debug_samples=debug_samples)
             model = ICNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp0':
+        elif 'icnet_warp' in model_name:
             self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp1':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp2':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp01':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp01(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp12':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp12(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        elif model_name == 'icnet_warp012':
-            self.datagen = CityscapesFlowGeneratorForICNet(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            model = ICNetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
-        # -------------------------------------------------------- MOBILE_UNET
-        elif model_name == 'mobile_unet':
-            self.datagen = CityscapesGenerator(dataset_path, debug_samples=debug_samples)
-            model = MobileUNet(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+
+            if model_name == 'icnet_warp0':
+                model = ICNetWarp0(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'icnet_warp1':
+                model = ICNetWarp1(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'icnet_warp2':
+                model = ICNetWarp2(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'icnet_warp01':
+                model = ICNetWarp01(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'icnet_warp12':
+                model = ICNetWarp12(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            elif model_name == 'icnet_warp012':
+                model = ICNetWarp012(target_size, self.datagen.n_classes, debug_samples=debug_samples)
         else:
             raise Exception("Unknown model!")
-            # self.datagen = CityscapesFlowGenerator(dataset_path, debug_samples=debug_samples, prev_skip=prev_skip, flip_enabled=not is_debug, optical_flow_type=optical_flow_type)
-            # model = MobileUNetWarp4(target_size, self.datagen.n_classes, debug_samples=debug_samples)
+            model = None
 
         print("-- Selected model", model.name)
 
@@ -242,7 +224,6 @@ class Trainer:
         self.train_callbacks.append(checkpoint)
 
         # ------------- early stopping
-        # if not self.is_debug:
         early_stopping = keras.callbacks.EarlyStopping(
             monitor='val_loss',
             min_delta=0,
@@ -257,9 +238,6 @@ class Trainer:
         # lr_base = 0.001  # self.model.optimizer().lr  # * (float(self.batch_size) / 16)
         # lr_power = 0.9
         # self.train_callbacks.append(lr_scheduler(epochs, lr_base, lr_power))
-
-        # TODO try to have large LR and reduce it after 15 epochs to a lot smaller
-        # see: https://github.com/keras-team/keras/issues/898#issuecomment-285995644
 
     def fit_model(self, run_name, epochs, restart_training=False, workers=1, max_queue=20, multiprocess=False):
         if not self.is_debug:
@@ -313,12 +291,6 @@ class Trainer:
             self._optical_flow_type
         )
 
-        # losswise_callback = CustomLosswiseKerasCallback(
-        #     tag=self.model.name + '|' + run_name,
-        #     params=losswise_params
-        # )
-        # self.train_callbacks.append(losswise_callback)
-
         self.prepare_callbacks(run_name, epochs)
 
         self.model.k.fit_generator(
@@ -331,11 +303,10 @@ class Trainer:
             validation_steps=val_steps,
             callbacks=self.train_callbacks,
             max_queue_size=max_queue,
-            shuffle=False,
+            shuffle=not self.is_debug,
             use_multiprocessing=multiprocess,
             workers=workers
         )
-
 
         # save final model
         self.model.save_final(self.get_run_path(run_name, '../../weights/'), epochs)

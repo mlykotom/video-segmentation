@@ -36,6 +36,10 @@ class BaseModel:
             self._model = self._create_model()
 
     def _prepare(self):
+        """
+        Initialize any parameters for model
+        :return:
+        """
         pass
 
     def make_multi_gpu(self, n_gpu):
@@ -67,11 +71,6 @@ class BaseModel:
         if compile_model:
             self.compile()
 
-            # self._model = keras.models.load_model(
-        #     filepath=filepath,
-        #     custom_objects=custom_objects,
-        #     compile=compile_model
-        # )
         return self
 
     @abstractmethod
@@ -159,24 +158,10 @@ class BaseModel:
     lr_params = None
 
     def optimizer_params(self):
-        if self.debug_samples == 1:
-            # return {'lr': 0.0001, 'decay': 0.0999}  # for 1 samples
-            # return {'lr': 0.0005, 'decay': 0.}  # for 1 samples
-            return {'lr': 0.001, 'decay': 0.03}  # for 1 samples
-            # return {'lr': 0.0001, 'decay': 0.}  # for 1 samples
-        elif self.debug_samples == 5:
-            return {'lr': 0.0012, 'decay': 0.0099999}  # for 5 samples
-        elif self.debug_samples == 120:
-            # return {'lr': 0.0007, 'decay': 0.5}
-            # return {'lr': 0.0002, 'decay': 0.0991}  # for 120 samples
+        if self.debug_samples == 120:
             return {'lr': 0.0001, 'decay': 0.05}
-        elif self.debug_samples == 20:
-            return {'lr': 0.00031, 'decay': 0.0999}  # for 20 samples
         else:
-            return {'lr': 0.001, 'decay': 0.055}
-            # return {'lr': 0.001, 'decay': 0.009}
-            # return {'lr': 0.0011, 'decay': 0.0099} # FOR SEGNET
-            # return {'lr': 0.001, 'decay': 0.009}      # FOR MOBILE_UNET
+            return {'lr': 0.001, 'decay': 0.05}
 
     def _optimizer_params(self):
         if self.lr_params is not None:

@@ -43,9 +43,6 @@ class CamVidGenerator(BaseDataGenerator):
             [0, 0, 0],  # Void
             [64, 192, 0],  # Wall
         ],
-        # 'weights_file': 'data/pretrained_dilation_camvid.pickle',
-        # 'input_shape': (900, 1100, 3),
-        # 'output_shape': (66, 91, 11),  # TODO what???
         'mean_pixel': (110.70, 108.77, 105.41),
     }
 
@@ -100,12 +97,7 @@ if __name__ == '__main__':
 
     import config
 
-    if os.environ['USER'] == 'mlykotom':
-        dataset_path = '/Users/mlykotom/'
-    else:
-        dataset_path = config.data_path()
-
-    datagen = CamVidGenerator(dataset_path)
+    datagen = CamVidGenerator(config.data_path())
 
     batch_size = 3
     target_size = (360, 480)

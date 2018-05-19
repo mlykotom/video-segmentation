@@ -26,10 +26,12 @@ class ICNetWarp(ICNet):
         branch_half = self.branch_half(self.input_shape)
         z = branch_half(x)
         z_old = branch_half(x_old)
+        branch_half_out = z
 
         # (1/4)
         branch_quarter = self.branch_quarter(branch_half.output_shape[1:])
         y = branch_quarter(z)
+        branch_quarter_out = y
 
         if 2 in self.warp_decoder:
             if self.training_phase:
@@ -37,7 +39,6 @@ class ICNetWarp(ICNet):
             else:
                 input_branch_quarter = Input(branch_quarter.output_shape[1:], name='prev_branch_14')
                 y_old = input_branch_quarter
-            # y = netwarp(branch_quarter.output_shape[1:])([y_old, y, transformed_flow])
             y = netwarp(y_old, y, transformed_flow)
 
         pyramid_block = self.pyramid_block(branch_quarter.output_shape[1:])
@@ -59,7 +60,6 @@ class ICNetWarp(ICNet):
                 input_branch_half = Input(conv3_1_sub2_proj_bn.output_shape[1:], name='prev_conv3_1_sub2_proj_bn')
                 y_old_ = input_branch_half
 
-            # y_ = netwarp(conv3_1_sub2_proj_bn.output_shape[1:])([y_old_, y_, transformed_flow])
             y_ = netwarp(y_old_, y_, transformed_flow)
 
         y = Add(name='sub24_sum')([y, y_])
@@ -73,6 +73,7 @@ class ICNetWarp(ICNet):
         # (1)
         block_0 = self.block_0(self.input_shape)
         y = block_0(x)
+        branch_full_out = y
 
         if 0 in self.warp_decoder:
             if self.training_phase:
@@ -81,22 +82,26 @@ class ICNetWarp(ICNet):
                 input_branch_full = Input(block_0.output_shape[1:], name='prev_branch_1')
                 y_old = input_branch_full
 
-            # y = netwarp(block_0.output_shape[1:])([y_old, y, transformed_flow])
             y = netwarp(y_old, y, transformed_flow)
 
         y = Add(name='sub12_sum')([y, y_])
         y = Activation('relu', name='sub12_sum/relu')(y)
         y = BilinearUpSampling2D(name='sub12_sum_interp')(y)
 
+        outputs = self.out_block(y, aux_1, aux_2)
+
         if not self.training_phase:
             if 0 in self.warp_decoder:
                 all_inputs.append(input_branch_full)
+                outputs.append(branch_full_out)
             if 1 in self.warp_decoder:
                 all_inputs.append(input_branch_half)
+                outputs.append(branch_half_out)
             if 2 in self.warp_decoder:
                 all_inputs.append(input_branch_quarter)
+                outputs.append(branch_quarter_out)
 
-        return self.out_block(all_inputs, y, aux_1, aux_2)
+        return Model(inputs=all_inputs, outputs=outputs)
 
     @staticmethod
     def get_custom_objects():
@@ -163,10 +168,5 @@ if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNetWarp0(target_size, 35, for_training=False)
+    model = ICNetWarp012(target_size, 35, for_training=False)
     print(model.summary())
-    model.save_json()
-    model.plot_model()
-
-    # model.k.load_weights('/home/mlyko/weights/city/rel/ICNetWarp12/0421:11e150.b8.lr=0.001000._dec=0.051000.of=farn.h5', by_name=True)
-    # print("succeeded")

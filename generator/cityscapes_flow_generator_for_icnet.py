@@ -23,8 +23,6 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
         i = 0
 
         while True:
-            in_arr = [[]] * 3
-            out_arr = [[]] * len(self.gt_sub)
             Y = []
             Y2 = []
             Y3 = []
@@ -35,8 +33,7 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
 
             for _ in range(batch_size):
                 (img_old_path, img_new_path), label_path = next(zipped)
-
-                apply_flip = random.randint(0, 1)
+                apply_flip = self.flip_enabled and random.randint(0, 1)
 
                 img_old = self._prep_img(type, img_old_path, target_size, apply_flip)
                 img_new = self._prep_img(type, img_new_path, target_size, apply_flip)
@@ -46,7 +43,6 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
                     # write optical flow to folder and read it from there
                     flo_file = self.dataset_path + 'flow/' + os.path.split(img_old_path)[-1] + '.flo'
                     if os.path.exists(flo_file):
-                        # print("-- reading opt flow from path %s" % flo_file)
                         flow = cv2.optflow.readOpticalFlow(flo_file)
                     else:
                         flow = self.calc_optical_flow(img_new, img_old)
@@ -56,19 +52,16 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
                     flow = self.calc_optical_flow(img_new, img_old)
 
                 flow_arr.append(flow)
-                in_arr[2].append(flow)
 
                 input1 = self.normalize(img_old, target_size=None)
-                in_arr[0].append(input1)
                 input1_arr.append(input1)
 
                 input2 = self.normalize(img_new, target_size=None)
-                in_arr[1].append(input2)
                 input2_arr.append(input2)
 
                 seg_img = self._prep_gt(type, label_path, target_size, apply_flip)
 
-                seg_tensor = self.one_hot_encoding(seg_img, tuple(a // 4 for a in target_size))  # target_size)
+                seg_tensor = self.one_hot_encoding(seg_img, tuple(a // 4 for a in target_size))
                 Y.append(seg_tensor)
 
                 seg_tensor2 = self.one_hot_encoding(seg_img, tuple(a // 8 for a in target_size))
@@ -76,18 +69,6 @@ class CityscapesFlowGeneratorForICNet(CityscapesFlowGenerator, BaseFlowGenerator
 
                 seg_tensor3 = self.one_hot_encoding(seg_img, tuple(a // 16 for a in target_size))
                 Y3.append(seg_tensor3)
-                #
-                # if self.gt_sub is None:
-                #     seg_tensor = self.one_hot_encoding(seg_img, target_size)
-                #     out_arr[i].append(seg_tensor)
-                # else:
-                #     for i, sub in enumerate(self.gt_sub):
-                #         subsampled_target_size = tuple(a // sub for a in target_size)
-                #         seg_tensor = self.one_hot_encoding(seg_img, subsampled_target_size)
-                #         out_arr[i].append(seg_tensor)
-
-            # x = [np.asarray(j) for j in in_arr]
-            # y = [np.array(j) for j in out_arr]
 
             x = [
                 np.asarray(input1_arr),
@@ -119,9 +100,7 @@ if __name__ == '__main__':
     datagen.load_files()
 
     batch_size = 3
-    # target_size = 288, 480
     target_size = 256, 512
-    # target_size = 1024, 2048  # orig size
 
     for imgBatch, labelBatch in datagen.flow('val', batch_size, target_size):
         old_img = imgBatch[0][0]
@@ -136,12 +115,11 @@ if __name__ == '__main__':
         target_size_14 = tuple(a // 4 for a in target_size)
         colored_class_image = datagen.one_hot_to_bgr(label, target_size_14, datagen.n_classes, datagen.labels)
 
-        winner = datagen.calcWarp(old_img, optical_flow, target_size)
+        winner = datagen.calc_warp(old_img, optical_flow, target_size)
         cv2.imshow("winner", winner)
 
         cv2.imshow("old", old_img)
         cv2.imshow("new", new_img)
         cv2.imshow("flo", flow_bgr)
         cv2.imshow("gt", colored_class_image)
-        cv2.imshow("diff", new_img - old_img)
         cv2.waitKey()

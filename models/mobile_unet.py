@@ -1,9 +1,8 @@
-import keras
 import keras.backend as K
 from keras import Input
 from keras.applications import mobilenet
 from keras.applications.mobilenet import DepthwiseConv2D
-from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose, Reshape, SpatialDropout2D
+from keras.layers import Conv2D, BatchNormalization, Activation, concatenate, Conv2DTranspose
 from keras.models import Model
 
 from base_model import BaseModel
@@ -169,15 +168,11 @@ class MobileUNet(BaseModel):
         b12 = self._depthwise_conv_block(b11, 1024, self.alpha, self.depth_multiplier, block_id=12, strides=(2, 2))
         b13 = self._depthwise_conv_block(b12, 1024, self.alpha, self.depth_multiplier, block_id=13)
 
-        # if not self.is_debug:
-        #     b13 = SpatialDropout2D(0.2)(b13)
-
         filters = int(512 * self.alpha)
         up1 = concatenate([
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b13),
             b11,
         ], axis=3)
-        # up1 = BatchNormalization()(up1)
 
         b14 = self._depthwise_conv_block(up1, filters, self.alpha_up, self.depth_multiplier, block_id=14)
 
@@ -186,7 +181,6 @@ class MobileUNet(BaseModel):
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b14),
             b05,
         ], axis=3)
-        # up2 = BatchNormalization()(up2)
 
         b15 = self._depthwise_conv_block(up2, filters, self.alpha_up, self.depth_multiplier, block_id=15)
 
@@ -195,7 +189,6 @@ class MobileUNet(BaseModel):
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b15),
             b03,
         ], axis=3)
-        # up3 = BatchNormalization()(up3)
 
         b16 = self._depthwise_conv_block(up3, filters, self.alpha_up, self.depth_multiplier, block_id=16)
 
@@ -204,7 +197,6 @@ class MobileUNet(BaseModel):
             Conv2DTranspose(filters, (2, 2), strides=(2, 2), padding='same')(b16),
             b01,
         ], axis=3)
-        # up4 = BatchNormalization()(up4)
 
         b17 = self._depthwise_conv_block(up4, filters, self.alpha_up, self.depth_multiplier, block_id=17)
 
@@ -237,4 +229,3 @@ if __name__ == '__main__':
 
     model = MobileUNet(target_size, 32)
     print(model.summary())
-    keras.utils.plot_model(model.k, 'mobile_unet.png', show_shapes=True, show_layer_names=True)

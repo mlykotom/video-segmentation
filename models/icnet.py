@@ -237,20 +237,18 @@ class ICNet(BaseModel):
         y = BatchNormalization(name=prefix + 'conv3_sub1_proj_bn')(y)
         return Model(x, y, name='branch_1')
 
-    def out_block(self, inputs, y, aux_1, aux_2):
+    def out_block(self, y, aux_1, aux_2):
         if self.training_phase:
             out = Conv2D(self.n_classes, 1, activation='softmax', name='out')(y)  # conv6_cls
             aux_1 = Conv2D(self.n_classes, 1, activation='softmax', name='sub4_out')(aux_1)
             aux_2 = Conv2D(self.n_classes, 1, activation='softmax', name='sub24_out')(aux_2)
 
-            model = Model(inputs=inputs, outputs=[out, aux_2, aux_1])
+            return [out, aux_2, aux_1]
         else:
             out = Conv2D(self.n_classes, 1, activation='softmax', name='out')(y)  # conv6_cls
             out = BilinearUpSampling2D(size=(4, 4), name='out_full')(out)
 
-            model = Model(inputs=inputs, outputs=out)
-
-        return model
+            return [out]
 
     def _create_model(self):
         inp = Input(shape=self.target_size + (3,))
@@ -289,7 +287,9 @@ class ICNet(BaseModel):
         y = Activation('relu', name='sub12_sum/relu')(y)
         y = BilinearUpSampling2D(name='sub12_sum_interp')(y)
 
-        return self.out_block(inp, y, aux_1, aux_2)
+        outputs = self.out_block(y, aux_1, aux_2)
+
+        return Model(inputs=inp, outputs=outputs)
 
     @staticmethod
     def get_custom_objects():
@@ -325,14 +325,13 @@ if __name__ == '__main__':
     else:
         __package__ = ''
 
-
     target_size = 256, 512
     import os
 
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-    model = ICNet(target_size, 35, for_training=False, from_json='model_ICNet_256x512.json')
+    model = ICNet(target_size, 35, for_training=False)
     print(model.summary())
-    # model.plot_model()
+    model.plot_model()
     # model.save_json()

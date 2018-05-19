@@ -15,8 +15,6 @@ class SegNet(BaseModel):
         super(SegNet, self)._prepare()
 
     def block_model(self, input_shape, filter_size, block_id, pool_at_end=True):
-        # input_name = 'input_block_' + str(block_id)
-        # name = input_name + '_' + str(K.get_uid(input_name))
         input = Input(shape=input_shape)
         out = Convolution2D(filter_size, self._kernel_size, padding='same')(input)
         out = BatchNormalization()(out)
@@ -76,6 +74,3 @@ if __name__ == '__main__':
     model = SegNet(target_size, 32, from_json='model_SegNet_256x512.json')
 
     print(model.summary())
-    # model.plot_model()
-
-    # model.save_json()

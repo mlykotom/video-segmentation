@@ -67,7 +67,7 @@ if __name__ == '__main__':
 
         colored_class_image = datagen.one_hot_to_bgr(label, target_size, datagen.n_classes, datagen.labels)
 
-        winner = datagen.calcWarp(left_img, optical_flow, target_size)
+        winner = datagen.calc_warp(left_img, optical_flow, target_size)
         cv2.imshow("winner", winner)
 
         cv2.imshow("old", left_img)

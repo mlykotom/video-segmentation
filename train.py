@@ -110,11 +110,22 @@ if __name__ == '__main__':
             help='Workers',
             default=1
         )
+        parser.add_argument(
+            '--multiprocess',
+            help='Multiprocess',
+            default=False
+        )
 
         parser.add_argument(
             '--queue',
             help='Max queue',
             default=50
+        )
+
+        parser.add_argument(
+            '--gpu_percent',
+            help='How much GPU memory will be taken',
+            default=None
         )
 
         args = parser.parse_args()
@@ -127,6 +138,8 @@ if __name__ == '__main__':
         raise Exception("Can't be multi model and gpu specified")
 
     dataset_path = config.data_path()
+
+    multiprocess = args.multiprocess is not None and (args.multiprocess == 'true' or args.multiprocess == 'True')
 
     print("---------------")
     print('dataset path', dataset_path)
@@ -143,7 +156,7 @@ if __name__ == '__main__':
     print("---------------")
     print("data augmentation", args.aug)
     print("---------------")
-    print("workers", args.workers)
+    print("workers", args.workers, "multiprocess", multiprocess)
     print("max_queue", args.queue)
     print("---------------")
 
@@ -156,6 +169,16 @@ if __name__ == '__main__':
         else:
             print("-- Using GPU id %s" % args.gid)
             os.environ["CUDA_VISIBLE_DEVICES"] = args.gid
+
+    from keras.backend.tensorflow_backend import set_session
+    import tensorflow as tf
+
+    if args.gpu_percent is not None:
+        print("--Using %f gpu" % float(args.gpu_percent))
+        config = tf.ConfigProto()
+        config.gpu_options.per_process_gpu_memory_fraction = float(args.gpu_percent)
+        config.gpu_options.allow_growth = True
+        set_session(tf.Session(config=config))
 
     try:
         epochs = int(args.epochs)
@@ -176,7 +199,18 @@ if __name__ == '__main__':
 
         data_augmentation = bool(args.aug)
 
-        trainer = Trainer(args.model, dataset_path, target_size, batch_size, n_gpu, debug_samples, early_stopping, optical_flow_type=optical_flow_type, data_augmentation=data_augmentation)
+        trainer = Trainer(
+            model_name=args.model,
+            dataset_path=dataset_path,
+            target_size=target_size,
+            batch_size=batch_size,
+            n_gpu=n_gpu,
+            debug_samples=debug_samples,
+            early_stopping=early_stopping,
+            optical_flow_type=optical_flow_type,
+            data_augmentation=data_augmentation
+        )
+
         trainer.model.compile(
             lr=float(args.lr) if args.lr is not None else None,
             lr_decay=float(args.dec) if args.dec is not None else 0.
@@ -191,7 +225,8 @@ if __name__ == '__main__':
             epochs=epochs,
             restart_training=restart_training,
             workers=int(args.workers),
-            max_queue=int(args.queue)
+            max_queue=int(args.queue),
+            multiprocess=multiprocess
         )
     except KeyboardInterrupt:
         print("Keyboard interrupted")

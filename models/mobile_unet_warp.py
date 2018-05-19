@@ -1,26 +1,17 @@
-import keras
-from keras import Input
-from keras.layers import Conv2D, Activation, concatenate, Conv2DTranspose
-from keras.models import Model
+from keras.layers import Activation, Conv2DTranspose
 
-from layers import BilinearUpSampling2D, Warp, LinearCombination
+from layers import BilinearUpSampling2D
+from layers.warp import *
 from mobile_unet import MobileUNet
 
 
-def netwarp_module(img_old, img_new, flo):
-    diff = keras.layers.Subtract(name='img_diff')([img_old, img_new])
-
-    x = concatenate([img_old, img_new, flo, diff])
-    x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-    x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-    x = Conv2D(3, (3, 3), activation='relu', padding='same')(x)
-    x = concatenate([flo, x])
-    # x = BatchNormalization()(x)
-    x = Conv2D(2, (3, 3), padding='same', name='transformed_flow')(x)
-    return x
-
-
 class MobileUNetWarp(MobileUNet):
+    """
+    WARNING: uses 2 branches for geting current segmentation mask instead of one with shared weights!
+    This was old way of experimenting with the model, so it's not updated to latest way of doing video segmentation.
+    If you want to use MobileUnet with video warping, needs to be updated based on ICNetWarp or SegNetWarp
+    """
+
     warp_decoder = []
 
     def __init__(self, target_size, n_classes, alpha=1.0, alpha_up=1.0, depth_multiplier=1, dropout=1e-3, debug_samples=0):
@@ -50,10 +41,6 @@ class MobileUNetWarp(MobileUNet):
         b12 = self._depthwise_conv_block(b11, 1024, self.alpha, self.depth_multiplier, block_id=12, strides=(2, 2), prefix=prefix)
         b13 = self._depthwise_conv_block(b12, 1024, self.alpha, self.depth_multiplier, block_id=13, prefix=prefix)
 
-        # if not self.is_debug:
-        #     b13 = SpatialDropout2D(0.1)(b13)
-        # b13 = Dropout(0.2)
-
         return b00, b01, b03, b05, b11, b13
 
     def decoder(self):
@@ -71,7 +58,6 @@ class MobileUNetWarp(MobileUNet):
 
         filters = int(256 * self.alpha)
 
-        # b05 = BatchNormalization()(Add()([self.b05, self.warped3])) if 3 in self.warp_decoder else self.b05
         b05 = LinearCombination()([self.b05, self.warped3]) if 3 in self.warp_decoder else self.b05
 
         up2 = concatenate([
@@ -83,7 +69,6 @@ class MobileUNetWarp(MobileUNet):
 
         filters = int(128 * self.alpha)
 
-        # b03 = BatchNormalization()(Add()([self.b03, self.warped2])) if 2 in self.warp_decoder else self.b03
         b03 = LinearCombination()([self.b03, self.warped2]) if 2 in self.warp_decoder else self.b03
 
         up3 = concatenate([
@@ -95,7 +80,6 @@ class MobileUNetWarp(MobileUNet):
 
         filters = int(64 * self.alpha)
 
-        # b01 = BatchNormalization()(Add()([self.b01, self.warped1])) if 1 in self.warp_decoder else self.b01
         b01 = LinearCombination()([self.b01, self.warped1]) if 1 in self.warp_decoder else self.b01
 
         up4 = concatenate([
@@ -107,15 +91,12 @@ class MobileUNetWarp(MobileUNet):
 
         filters = int(32 * self.alpha)
 
-        # b00 = BatchNormalization()(Add()([self.b00, self.warped0])) if 0 in self.warp_decoder else self.b00
         b00 = LinearCombination()([self.b00, self.warped0]) if 0 in self.warp_decoder else self.b00
-        # b00 = Dot(axes=(0, 1, 2, 3))([self.b00, self.warped0]) if 0 in self.warp_decoder else self.b00
 
         up5 = concatenate([
             b17,
             b00
         ], axis=3)
-        # up5 = BatchNormalization()(up5)
 
         b18 = self._depthwise_conv_block(up5, filters, self.alpha_up, self.depth_multiplier, block_id=18)
         b18 = self._conv_block(b18, filters, self.alpha_up, block_id=18)
@@ -128,7 +109,7 @@ class MobileUNetWarp(MobileUNet):
         flo = Input(shape=self.target_size + (2,), name='data_flow')
 
         all_inputs = [img_old, img_new, flo]
-        transformed_flow = netwarp_module(img_old, img_new, flo)
+        transformed_flow = flow_cnn(self.target_size)(all_inputs)
 
         # -------- OLD FRAME BRANCH
         self.old_b00, self.old_b01, self.old_b03, self.old_b05, self.old_b11, self.old_b13 = self.frame_branch(img_old, prefix='old_')

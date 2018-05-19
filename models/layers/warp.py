@@ -1,12 +1,11 @@
-import cv2
 import keras
 import keras.backend as K
 import tensorflow as tf
 from keras.constraints import Constraint
 from keras.engine import Layer
 from keras.initializers import RandomNormal
+from keras.layers import Conv2D, concatenate
 from keras.layers import Input
-from keras.layers import Lambda, Conv2D, concatenate
 from keras.models import Model
 
 
@@ -91,39 +90,14 @@ class LinearCombination(Layer):
         return K.tf.multiply(self.w1, inputs[0]) + K.tf.multiply(self.w2, inputs[1])
 
 
-class RGB2Gray(Lambda):
-    def __init__(self, **kwargs):
-        def convertor(input):
-            return tf.image.rgb_to_grayscale(input)
-
-        super(RGB2Gray, self).__init__(convertor, **kwargs)
-
-
-class MorphOpeningDiffBW(Lambda):
-    def __init__(self, **kwargs):
-        ellipse = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        self.kernel = tf.expand_dims(tf.convert_to_tensor(ellipse, dtype=tf.int32), axis=-1)
-
-        self.strides = [1, 1, 1, 1]
-        self.rates = [1, 1, 1, 1]
-        super(MorphOpeningDiffBW, self).__init__(self._morph_open, **kwargs)
-
-    def _morph_open(self, input_old_new):
-        gray_old = tf.image.rgb_to_grayscale(input_old_new[0])
-        gray_new = tf.image.rgb_to_grayscale(input_old_new[1])
-
-        diff_tf = tf.subtract(gray_old, gray_new)
-        diff_tf = tf.image.convert_image_dtype(diff_tf, dtype=tf.int32)
-
-        erode = tf.nn.erosion2d(diff_tf, self.kernel, self.strides, self.rates, padding='SAME')
-        dilate = tf.nn.dilation2d(erode, self.kernel, self.strides, self.rates, padding='SAME')
-        dilate = tf.cast(dilate, tf.float32) / 256.0
-
-        out = tf.clip_by_value(dilate, 0, 1)
-        return out
-
-
 def flow_cnn(input_shape):
+    """
+    FlowCNN module for transforming optical flow.
+    Represented by keras model
+    :param input_shape:
+    :return:
+    """
+
     img_old = Input(input_shape + (3,), name='img_old')
     img_new = Input(input_shape + (3,), name='img_current')
     flo = Input(input_shape + (2,), name='flow')
@@ -137,7 +111,6 @@ def flow_cnn(input_shape):
 
     transformed_flow = Conv2D(
         2, (1, 1),
-        # 2, (3, 3),  # TODO changed to 3,3
         padding='same',
         name='transformed_flow',
         kernel_initializer=RandomNormal(stddev=0.001),
@@ -184,9 +157,6 @@ class Warp(Layer):
 
     @staticmethod
     def tf_warp(img, flow, size):
-        # TODO read https://stackoverflow.com/questions/34902782/interpolated-sampling-of-points-in-an-image-with-tensorflow
-        # TODO read https://github.com/tensorflow/models/blob/master/research/transformer/spatial_transformer.py
-
         H, W = size
 
         def get_pixel_value(img, x, y):
@@ -277,17 +247,17 @@ class Warp(Layer):
         return out
 
 
-from IPython.display import SVG
-from keras.utils.vis_utils import model_to_dot
-
 if __name__ == '__main__':
+    from IPython.display import SVG
+    from keras.utils.vis_utils import model_to_dot
+
     target_size = 256, 512
     img_old = Input(target_size + (3,), name='img_old')
     k_layer = Input(target_size + (3,), name='k_layer_prev')
     img = Input(target_size + (3,), name='img_current')
     flo = Input(target_size + (2,), name='flow')
 
-    x = flow_cnn(img_old, img, flo)
+    x = flow_cnn(target_size)([img_old, img, flo])
     model = Model([img_old, img, flo], x, name='FlowCNN')
 
     svg = SVG(model_to_dot(model, rankdir='LR', show_shapes=True, show_layer_names=True).create(prog='dot', format='svg'))

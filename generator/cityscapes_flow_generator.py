@@ -86,9 +86,7 @@ if __name__ == '__main__':
     datagen = CityscapesFlowGenerator(config.data_path())
 
     batch_size = 1
-    # target_size = 288, 480
     target_size = 256, 512
-    # target_size = 1024, 2048  # orig size
 
     for imgBatch, labelBatch in datagen.flow('val', batch_size, target_size):
         old_img = imgBatch[0][0]
@@ -102,13 +100,11 @@ if __name__ == '__main__':
 
         colored_class_image = datagen.one_hot_to_bgr(label, target_size, datagen.n_classes, datagen.labels)
 
-        winner = datagen.calcWarp(old_img, optical_flow, target_size)
+        winner = datagen.calc_warp(old_img, optical_flow, target_size)
         cv2.imshow("winner", winner)
 
         cv2.imshow("old", datagen.denormalize(old_img))
         cv2.imshow("new", datagen.denormalize(new_img))
         cv2.imshow("flo", flow_bgr)
         cv2.imshow("gt", colored_class_image)
-        # cv2.imshow("diff_new_old", new_img - old_img)
-        # cv2.imshow("diff_old_new", old_img - new_img)
         cv2.waitKey()

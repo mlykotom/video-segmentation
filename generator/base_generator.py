@@ -218,8 +218,6 @@ class BaseDataGenerator:
         return img
 
     def copy_to_scratch(self, img_path):
-        # os.environ['SCRATCH'] = '/Users/mlykotom/Downloads/scratch/'
-
         if 'SCRATCH' in os.environ:
             scratch_dir = os.environ['SCRATCH'] + '/'
             file_name = os.path.split(img_path)[-1]
@@ -245,19 +243,19 @@ class BaseDataGenerator:
             if self.flip_enabled and apply_flip:
                 img = cv2.flip(img, 1)
 
-        # if self.rotation:
-        #     angle = random.gauss(mu=0.0, sigma=self.rotation)
-        # else:
-        #     angle = 0.0
-        # if self.zoom:
-        #     scale = random.gauss(mu=1.0, sigma=self.zoom)
-        # else:
-        #     scale = 1.0
+        if self.rotation:
+            angle = random.gauss(mu=0.0, sigma=self.rotation)
+        else:
+            angle = 0.0
+        if self.zoom:
+            scale = random.gauss(mu=1.0, sigma=self.zoom)
+        else:
+            scale = 1.0
 
-        # if self.rotation or self.zoom:
-        #     M = cv2.getRotationMatrix2D((img.shape[1] // 2, img.shape[0] // 2), angle, scale)
-        #     img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
-        #     img2 = cv2.warpAffine(img2, M, (img2.shape[1], img2.shape[0]))
+        if self.rotation or self.zoom:
+            M = cv2.getRotationMatrix2D((img.shape[1] // 2, img.shape[0] // 2), angle, scale)
+            img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
+
         return img
 
     def normalize(self, rgb, target_size):
@@ -274,9 +272,10 @@ class BaseDataGenerator:
         if self.is_augment and type == 'train':
             if self.flip_enabled and apply_flip:
                 seg_img = cv2.flip(seg_img, 1)
-        # if self.rotation or self.zoom:
-        #     M = cv2.getRotationMatrix2D((seg_img.shape[1] // 2, seg_img.shape[0] // 2), angle, scale)
-        #     seg_img = cv2.warpAffine(seg_img, M, (seg_img.shape[1], seg_img.shape[0]))
+
+        if self.rotation or self.zoom:
+            M = cv2.getRotationMatrix2D((seg_img.shape[1] // 2, seg_img.shape[0] // 2), angle, scale)
+            seg_img = cv2.warpAffine(seg_img, M, (seg_img.shape[1], seg_img.shape[0]))
 
         return seg_img
 
@@ -360,9 +359,6 @@ class BaseFlowGenerator(BaseDataGenerator):
         else:
             return flow
 
-    def flow_just_img(self, type, batch_size, target_size):
-        return super(BaseFlowGenerator, self).flow(type, batch_size, target_size)
-
     @threadsafe_generator
     def flow(self, type, batch_size, target_size):
         if not self._files_loaded:
@@ -409,8 +405,7 @@ class BaseFlowGenerator(BaseDataGenerator):
         return bgr
 
     @staticmethod
-    def calcWarp(img_old, flow, size):
-        # from ..models.layers.warp import Warp
+    def calc_warp(img_old, flow, size):
         from models.layers.warp import Warp
 
         with tf.Session() as sess:
