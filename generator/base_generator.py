@@ -243,18 +243,18 @@ class BaseDataGenerator:
             if self.flip_enabled and apply_flip:
                 img = cv2.flip(img, 1)
 
-        if self.rotation:
-            angle = random.gauss(mu=0.0, sigma=self.rotation)
-        else:
-            angle = 0.0
-        if self.zoom:
-            scale = random.gauss(mu=1.0, sigma=self.zoom)
-        else:
-            scale = 1.0
-
-        if self.rotation or self.zoom:
-            M = cv2.getRotationMatrix2D((img.shape[1] // 2, img.shape[0] // 2), angle, scale)
-            img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
+        # if self.rotation:
+        #     angle = random.gauss(mu=0.0, sigma=self.rotation)
+        # else:
+        #     angle = 0.0
+        # if self.zoom:
+        #     scale = random.gauss(mu=1.0, sigma=self.zoom)
+        # else:
+        #     scale = 1.0
+        #
+        # if self.rotation or self.zoom:
+        #     M = cv2.getRotationMatrix2D((img.shape[1] // 2, img.shape[0] // 2), angle, scale)
+        #     img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
 
         return img
 
@@ -273,9 +273,9 @@ class BaseDataGenerator:
             if self.flip_enabled and apply_flip:
                 seg_img = cv2.flip(seg_img, 1)
 
-        if self.rotation or self.zoom:
-            M = cv2.getRotationMatrix2D((seg_img.shape[1] // 2, seg_img.shape[0] // 2), angle, scale)
-            seg_img = cv2.warpAffine(seg_img, M, (seg_img.shape[1], seg_img.shape[0]))
+        # if self.rotation or self.zoom:
+        #     M = cv2.getRotationMatrix2D((seg_img.shape[1] // 2, seg_img.shape[0] // 2), angle, scale)
+        #     seg_img = cv2.warpAffine(seg_img, M, (seg_img.shape[1], seg_img.shape[0]))
 
         return seg_img
 

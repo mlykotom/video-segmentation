@@ -210,4 +210,5 @@ if __name__ == '__main__':
 
     target_size = 256, 512
     model = SegnetWarp3(target_size, 35, for_training=False)
+    model.plot_model()
     print(model.summary())
