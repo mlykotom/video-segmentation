@@ -5,3 +5,4 @@ from cityscapes_flow_generator import CityscapesFlowGenerator
 from gta_generator import GTAGenerator
 from cityscapes_generator_for_icnet import CityscapesGeneratorForICNet
 from cityscapes_flow_generator_for_icnet import CityscapesFlowGeneratorForICNet
+from base_generator import BaseFlowGenerator, BaseDataGenerator
