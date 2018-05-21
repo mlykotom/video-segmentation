@@ -1,4 +1,3 @@
-# ###############learning rate scheduler####################
 import json
 
 from keras import callbacks

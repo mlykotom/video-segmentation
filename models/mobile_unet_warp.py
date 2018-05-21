@@ -7,6 +7,8 @@ from mobile_unet import MobileUNet
 
 class MobileUNetWarp(MobileUNet):
     """
+    TODO - WARNING: NOT USED IN WORK! MAY NEED TO BE UPDATED BASED ON ICNetWarp or SegNetWarp models
+
     WARNING: uses 2 branches for geting current segmentation mask instead of one with shared weights!
     This was old way of experimenting with the model, so it's not updated to latest way of doing video segmentation.
     If you want to use MobileUnet with video warping, needs to be updated based on ICNetWarp or SegNetWarp

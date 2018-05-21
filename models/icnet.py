@@ -334,4 +334,3 @@ if __name__ == '__main__':
     model = ICNet(target_size, 35, for_training=False)
     print(model.summary())
     model.plot_model()
-    # model.save_json()

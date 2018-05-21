@@ -11,8 +11,18 @@ from layers import BilinearUpSampling2D
 
 class MobileUNet(BaseModel):
 
-    def __init__(self, target_size, n_classes, alpha=1.0, alpha_up=1.0, depth_multiplier=1, dropout=1e-3,
-                 debug_samples=0):
+    def __init__(self, target_size, n_classes, alpha=1.0, alpha_up=1.0, depth_multiplier=1, dropout=1e-3, debug_samples=0):
+        """
+        TODO - WARNING: NOT USED IN WORK! MAY NEED TO BE UPDATED BASED ON ICNet or SegNet models
+
+        :param target_size:
+        :param n_classes:
+        :param alpha:
+        :param alpha_up:
+        :param depth_multiplier:
+        :param dropout:
+        :param debug_samples:
+        """
         self.alpha = alpha
         self.alpha_up = alpha_up
         self.depth_multiplier = depth_multiplier

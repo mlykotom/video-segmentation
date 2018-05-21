@@ -120,6 +120,13 @@ def flow_cnn(input_shape):
 
 
 def netwarp(layer_old, layer_new, transformed_flow):
+    """
+    NetWarp module with linear combination
+    :param layer_old:
+    :param layer_new:
+    :param transformed_flow:
+    :return:
+    """
     out_size = layer_old.get_shape().as_list()[1:3]
     resized_flow = ResizeBilinear(out_size)(transformed_flow)
 
@@ -130,6 +137,11 @@ def netwarp(layer_old, layer_new, transformed_flow):
 
 class Warp(Layer):
     def __init__(self, resize=False, **kwargs):
+        """
+        Warping layer. Expects list of 2 shapes [img, optical_flow]
+        :param resize:
+        :param kwargs:
+        """
         super(Warp, self).__init__(**kwargs)
         self.resize = resize
 
@@ -157,6 +169,18 @@ class Warp(Layer):
 
     @staticmethod
     def tf_warp(img, flow, size):
+        """
+        Tensorflow layer for warping with using optical flow
+
+        Based on:
+         https://stackoverflow.com/questions/34902782/interpolated-sampling-of-points-in-an-image-with-tensorflow
+         https://github.com/tensorflow/models/blob/master/research/transformer/spatial_transformer.py
+
+        :param img:
+        :param flow:
+        :param size:
+        :return:
+        """
         H, W = size
 
         def get_pixel_value(img, x, y):
