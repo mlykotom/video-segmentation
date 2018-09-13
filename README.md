@@ -1,4 +1,4 @@
-# video-segmentation
+# Video segmentation of street scenes
 
 This is repository for my thesis project at FIT BUT.
 
